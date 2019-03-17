@@ -72,7 +72,12 @@ class Manage:
     def all(self):
         select_query = """SELECT * from {}""".format(self._table_name)
         self.cursor.execute(select_query)
-        return self.cursor.fetchall()
+
+        res = self.cursor.fetchall()
+        # columns_names = [ii.name for ii in self.cursor.description]
+        res_d = [self.model_cls(**dict(zip([ii.name for ii in self.cursor.description], res[i]))) for i in
+                 range(len(res))]
+        return res_d
 
     def get(self, *_, **kwargs):
         select_get_query = """
@@ -80,29 +85,28 @@ class Manage:
             WHERE {1}
         """.format(self._table_name, ' AND '.join(['{}={}'.format(k, v) for k, v in kwargs.items()]))
 
-        # print(select_get_query)
-
         self.cursor.execute(select_get_query)
-        res = self.cursor.fetchone()
-        # print(res)
+        res = self.cursor.fetchall()
+
         if len(res) > 1:
             raise MultipleObjectsReturned('get() returned more than one {}'.format(self._table_name))
         elif len(res) == 0:
             raise DoesNotExist('{} matching query does not exist.'.format(self._table_name))
+        else:
+            res_d = dict(zip([i.name for i in self.cursor.description], res[0]))
 
-        return res
+        return self.model_cls(**res_d)
 
     def __get__(self, instance, owner):
         if self.model_cls is None:
             self.model_cls = owner
 
-        # print('owner', owner.__dict__)
+        # print('owner', type(owner))
         setattr(self, '_table_name', owner._table_name)
         return self
 
     def create(self, *_, **kwargs):
         print(self.model_cls)
-        # print(kwargs)
 
 
 class Model(metaclass=ModelMeta):
@@ -127,6 +131,15 @@ class User(Model):
     date_added = StringField(required=False)
     age = IntField(required=False)
 
+    def __str__(self):
+        return 'User {}'.format(self.name, self.age)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.name, self.age)
+
+    def update(self):
+        pass
+
     class Meta:
         table_name = 'ormtable'
 
@@ -135,8 +148,10 @@ class User(Model):
 #     sex = StringField()
 
 
-user = User(name='name', )
-print(User.objects.get(id=1, age=15))
+# user = User(name='name', )
+user_obj = User.objects.get(id=1)
+print(user_obj.name)
+print(User.objects.all())
 # print(user.__dict__)
 # print(User.objects.all())
 
