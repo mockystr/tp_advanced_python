@@ -1,6 +1,6 @@
 import psycopg2
 from fields import Field
-from exceptions import MultipleObjectsReturned, DoesNotExist
+from exceptions import (MultipleObjectsReturned, DoesNotExist, DeleteError)
 from constants import (user_db_constant,
                        password_db_constant,
                        host_db_constant,
@@ -33,8 +33,7 @@ class ModelMeta(type):
 
 class Manage:
     # todo order by
-    # todo slices
-    # todo queryset
+    # todo queryset slices
 
     def __init__(self):
         self.connection = psycopg2.connect(user=user_db_constant,
@@ -64,13 +63,16 @@ class Manage:
         self.cursor.execute(select_get_query)
         res = self.cursor.fetchall()
 
+        # print(res)
+        # print(self.cursor.description)
+
         if len(res) > 1:
             raise MultipleObjectsReturned('get() returned more than one {}'.format(self._table_name))
         elif len(res) == 0:
             raise DoesNotExist('{} matching query does not exist.'.format(self._table_name))
         else:
             res_d = dict(zip([i.name for i in self.cursor.description], res[0]))
-
+        # print(res_d)
         return self.model_cls(**res_d)
 
     def __get__(self, instance, owner):
@@ -92,7 +94,7 @@ class Manage:
         self.cursor.execute(insert_query)
 
         res = dict(zip([i.name for i in self.cursor.description], self.cursor.fetchone()))
-        print('res', res)
+        # print('res', res)
         # if 'commit' in kwargs.keys():
         self.connection.commit()
         return self.model_cls(**res)
@@ -100,13 +102,38 @@ class Manage:
 
 class Model(metaclass=ModelMeta):
     def __init__(self, *_, **kwargs):
+        self.connection = psycopg2.connect(user=user_db_constant,
+                                           password=password_db_constant,
+                                           host=host_db_constant,
+                                           port=port_db_constant,
+                                           database=database_db_constant)
+        self.cursor = self.connection.cursor()
+
+        setattr(self, 'id', kwargs.get('id'))
         for field_name, field in self._fields.items():
             value = field.validate(kwargs.get(field_name))
             setattr(self, field_name, value)
 
-        # setattr(self, '_table_name', self._table_name)
-
     objects = Manage()
+
+    def delete(self):
+        if self.id is None:
+            raise DeleteError('{} object can\'t be deleted because its id attribute is set to None.'.
+                              format(self._table_name))
+        try:
+            delete_query = """
+                DELETE FROM {}
+                WHERE id={}
+            """.format(self._table_name, self.id)
+
+            self.cursor.execute(delete_query)
+            self.connection.commit()
+        except Exception:
+            raise DeleteError('{} object can\'t be deleted because its id is incorrect.'.
+                              format(self._table_name))
+
+    def update(self):
+        pass
 
     class Meta:
         table_name = ''
