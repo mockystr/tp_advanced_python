@@ -1,12 +1,13 @@
 from model import Model
-from fields import StringField, IntField
+from fields import StringField, IntField, DateField, FloatField
 
 
 class User(Model):
-    name = StringField()
-    description = StringField(required=False)
-    date_added = StringField(required=False)
-    age = IntField(required=False)
+    name = StringField(required=True)
+    description = StringField()
+    date_added = StringField()
+    age = IntField()
+    price = FloatField()
 
     def __str__(self):
         return 'User {}'.format(self.name, self.age)

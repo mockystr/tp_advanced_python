@@ -1,3 +1,6 @@
+import datetime
+
+
 class Field:
     def __init__(self, f_type, required=True, default=None):
         self.f_type = f_type
@@ -12,10 +15,20 @@ class Field:
 
 
 class IntField(Field):
-    def __init__(self, required=True, default=None):
+    def __init__(self, required=False, default=None):
         super().__init__(int, required, default)
 
 
 class StringField(Field):
-    def __init__(self, required=True, default=None):
+    def __init__(self, required=False, default=None):
         super().__init__(str, required, default)
+
+
+class DateField(Field):
+    def __init__(self, required=False, default=None):
+        super().__init__(datetime.datetime, required, default)
+
+
+class FloatField(Field):
+    def __init__(self, required=False, default=None):
+        super().__init__(float, required, default)

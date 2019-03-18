@@ -1,10 +1,13 @@
 from my_models import User
+import datetime
 
 if __name__ == '__main__':
     # user = User(name='name', )
-    user_obj = User.objects.get(id=1)
-    print(user_obj.name)
-    print(User.objects.all())
+    # user_obj = User.objects.get(id=1)
+    # print(user_obj.name)
+    print(
+        User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now())
+    )
     # print(user.__dict__)
     # print(User.objects.all())
 

@@ -1,6 +1,11 @@
 import psycopg2
 from fields import Field
 from exceptions import MultipleObjectsReturned, DoesNotExist
+from constants import (user_db_constant,
+                       password_db_constant,
+                       host_db_constant,
+                       port_db_constant,
+                       database_db_constant)
 
 
 class ModelMeta(type):
@@ -27,12 +32,16 @@ class ModelMeta(type):
 
 
 class Manage:
+    # todo order by
+    # todo slices
+    # todo queryset
+
     def __init__(self):
-        self.connection = psycopg2.connect(user="emirnavruzov",
-                                           password="qwe123@#29",
-                                           host="127.0.0.1",
-                                           port="5432",
-                                           database="ormdb")
+        self.connection = psycopg2.connect(user=user_db_constant,
+                                           password=password_db_constant,
+                                           host=host_db_constant,
+                                           port=port_db_constant,
+                                           database=database_db_constant)
         self.cursor = self.connection.cursor()
         self.model_cls = None
 
@@ -73,7 +82,20 @@ class Manage:
         return self
 
     def create(self, *_, **kwargs):
-        print(self.model_cls)
+        # print([type(i) for i in kwargs.values()])
+        insert_query = """
+            INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;
+        """.format(self.model_cls._table_name,
+                   ', '.join(kwargs.keys()),
+                   ', '.join(map(lambda x: "\'{}\'".format(x), kwargs.values())))
+        # print(insert_query)
+        self.cursor.execute(insert_query)
+
+        res = dict(zip([i.name for i in self.cursor.description], self.cursor.fetchone()))
+        print('res', res)
+        # if 'commit' in kwargs.keys():
+        self.connection.commit()
+        return self.model_cls(**res)
 
 
 class Model(metaclass=ModelMeta):
