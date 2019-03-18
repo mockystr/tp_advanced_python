@@ -3,15 +3,15 @@ import datetime
 
 if __name__ == '__main__':
     # user = User(name='name', )
-    user_obj = User.objects.get(id=48)
-    user_obj.delete()
+    # user_obj = User.objects.get(id=49)
+    # user_obj.delete()
+    print(User.objects.get(name='emir_name'))
     # print(user_obj.__dict__)
     # print(user_obj.name)
     # print(
     #     User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now())
     # )
     # print(user.__dict__)
-    # print(User.objects.all())
 
     # User.objects.create(id=1, name='name')
     # User.objects.update(id=1)

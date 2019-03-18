@@ -19,6 +19,7 @@ class ModelMeta(type):
         if not hasattr(meta, 'table_name'):
             raise ValueError('table_name is empty')
 
+        # todo create table from shell
         # todo mro
         # print(namespace.items())
 
@@ -56,9 +57,9 @@ class Manage:
 
     def get(self, *_, **kwargs):
         select_get_query = """
-            SELECT * FROM {0}
-            WHERE {1}
-        """.format(self._table_name, ' AND '.join(['{}={}'.format(k, v) for k, v in kwargs.items()]))
+            SELECT * FROM {0} WHERE {1};
+        """.format(self._table_name, ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in kwargs.items()]))
+        # print(select_get_query)
 
         self.cursor.execute(select_get_query)
         res = self.cursor.fetchall()
@@ -67,7 +68,8 @@ class Manage:
         # print(self.cursor.description)
 
         if len(res) > 1:
-            raise MultipleObjectsReturned('get() returned more than one {}'.format(self._table_name))
+            raise MultipleObjectsReturned('get() returned more than one {} -- it returned {}!'.
+                                          format(self._table_name, len(res)))
         elif len(res) == 0:
             raise DoesNotExist('{} matching query does not exist.'.format(self._table_name))
         else:
