@@ -12,3 +12,7 @@ class DeleteError(Exception):
 
 class DuplicateKeyConstraint(Exception):
     pass
+
+
+class OrderByFieldError(Exception):
+    pass

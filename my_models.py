@@ -5,7 +5,7 @@ from fields import StringField, IntField, DateField, FloatField
 class User(Model):
     name = StringField(required=True)
     description = StringField()
-    date_added = StringField()
+    date_added = DateField()
     age = IntField()
     coins = FloatField()
 
@@ -20,6 +20,7 @@ class User(Model):
 
     class Meta:
         table_name = 'ormtable'
+        order_by = '-name'
 
 # class Man(User):
 #     sex = StringField()

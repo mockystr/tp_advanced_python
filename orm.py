@@ -2,7 +2,7 @@ from my_models import User
 import datetime
 
 if __name__ == '__main__':
-    user = User(name='name')
+    # user = User(name='name')
     # print(user.__dict__)
     # user.name = 'new_new'
     # user.save()
@@ -12,15 +12,24 @@ if __name__ == '__main__':
     # user_obj.delete()
     #
     #
-    # print(User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now()))
+    # user = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(), description='im fucker',
+    #                            coins=123.3)
+    # user.coins = '228.98'
+    # user.save()
+    # print(user.coins)
+
+    print(User.objects.get(id=106).coins)
     # print(User.objects.create())
+
     #
     # User.objects.create(id=1, name='name')
     # User.objects.update(id=1)
     # User.objects.delete(id=1)
     #
-    # User.objects.filter(id=2).filter(name='petya')
 
-    user.name = '2'
-    user.save()
-    user.delete()
+    # user.name = '2'
+    # user.save()
+    # user.delete()
+
+    # todo filter
+    # User.objects.filter(id=2).filter(name='petya')

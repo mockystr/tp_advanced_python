@@ -3,7 +3,8 @@ from fields import Field
 from exceptions import (MultipleObjectsReturned,
                         DoesNotExist,
                         DeleteError,
-                        DuplicateKeyConstraint)
+                        DuplicateKeyConstraint,
+                        OrderByFieldError)
 from constants import (user_db_constant,
                        password_db_constant,
                        host_db_constant,
@@ -24,14 +25,18 @@ class ModelMeta(type):
 
         # todo create table from shell
         # todo mro
-        # print(namespace.items())
 
         fields = {k: v for k, v in namespace.items()
                   if isinstance(v, Field)}
 
-        # print(fields)
+        if hasattr(meta, 'order_by'):
+            if meta.order_by.strip('-') not in fields.keys():
+                raise OrderByFieldError(
+                    'ordering refers to the nonexistent field \'{}\''.format(meta.order_by.strip('-')))
+
         namespace['_fields'] = fields
         namespace['_table_name'] = meta.table_name
+        namespace['_order_by'] = getattr(meta, 'order_by', None)
         return super().__new__(mcs, name, bases, namespace)
 
 
@@ -135,13 +140,24 @@ class Model(metaclass=ModelMeta):
 
     def save(self):
         """update if exists in db or create if not"""
+        object_fields = ['id', *list(self._fields.keys())]
+
         if self.__dict__.get('id') is not None:
-            print('i need to update!')
+            set_arr = []
+            for i in object_fields:
+                set_arr.append("{}=\'{}\'".format(i, getattr(self, i)))
+
             update_query = """
-            
-            """
+                UPDATE {}
+                SET {}
+                WHERE id={}
+            """.format(self._table_name,
+                       ', '.join(set_arr),
+                       self.id)
+            print(update_query)
+            self.cursor.execute(update_query)
+            self.connection.commit()
         else:
-            object_fields = ['id', *list(self._fields.keys())]
             # object_values = [self.__dict__.get('id', 'DEFAULT'), *list(self._fields.values())]
             # print('object_fields', object_fields)
             # print('object_values', object_values)
