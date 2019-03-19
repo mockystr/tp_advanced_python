@@ -8,12 +8,11 @@ connection = psycopg2.connect(user="emirnavruzov",
                               port="5432",
                               database="ormdb")
 cursor = connection.cursor()
-connection = psycopg2.connect(user="emirnavruzov",
-                              password="qwe123@#29",
-                              host="127.0.0.1",
-                              port="5432",
-                              database="ormdb")
-cursor = connection.cursor()
+
+cursor.execute("""INSERT INTO ormtable (id, name, description, date_added, age, coins) 
+                  VALUES (null, 'name', null , null, null, null);
+               """)
+connection.commit()
 #     insert_query = '''INSERT INTO ormtable (id ,name) VALUES (3, '1emir test with select');'''
 #     select_query = '''SELECT * FROM ormtable LIMIT 2 OFFSET 1;'''
 #     cursor.execute(select_query)

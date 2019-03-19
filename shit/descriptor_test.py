@@ -40,6 +40,9 @@
 
 class Fuck():
     def __init__(self, *_, **kwargs):
+        setattr(self, 'sad', 1)
+        setattr(self, 'sad', 2)
+        setattr(self, 'sad', 3)
         if 'commit' in kwargs.keys():
             print(kwargs)
         else:
@@ -47,3 +50,4 @@ class Fuck():
 
 
 x = Fuck(pussy=1, origin=None)
+print(x.__dict__)

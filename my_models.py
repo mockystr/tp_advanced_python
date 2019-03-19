@@ -7,7 +7,7 @@ class User(Model):
     description = StringField()
     date_added = StringField()
     age = IntField()
-    price = FloatField()
+    coins = FloatField()
 
     def __str__(self):
         return 'User {}'.format(self.name, self.age)

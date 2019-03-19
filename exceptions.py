@@ -1,16 +1,14 @@
 class MultipleObjectsReturned(Exception):
-    def __init__(self, message='', errors=None):
-        self.message = message
-        self.errors = errors
+    pass
 
 
 class DoesNotExist(Exception):
-    def __init__(self, message='', errors=None):
-        self.message = message
-        self.errors = errors
+    pass
 
 
 class DeleteError(Exception):
-    def __init__(self, message='', errors=None):
-        self.message = message
-        self.errors = errors
+    pass
+
+
+class DuplicateKeyConstraint(Exception):
+    pass
