@@ -22,7 +22,7 @@ class User(Model):
 
     class Meta:
         table_name = 'ormtable'
-        order_by = ('-name', '-description')
+        order_by = ('-name', 'age')
 
 
 class Man(User):
@@ -30,3 +30,4 @@ class Man(User):
 
     class Meta:
         table_name = 'Man'
+        order_by = ('-name', 'coins', 'sex')
