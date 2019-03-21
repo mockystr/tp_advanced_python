@@ -4,7 +4,8 @@ from exceptions import (MultipleObjectsReturned,
                         DoesNotExist,
                         DeleteError,
                         DuplicateKeyConstraint,
-                        OrderByFieldError)
+                        OrderByFieldError,
+                        IntegrityError)
 from constants import (user_db_constant,
                        password_db_constant,
                        host_db_constant,
@@ -20,19 +21,31 @@ class ModelMeta(type):
         meta = namespace.get('Meta')
         if meta is None:
             raise ValueError('meta is none')
-        if not hasattr(meta, 'table_name'):
-            raise ValueError('table_name is empty')
 
+        if not hasattr(meta, 'table_name'):
+            raise ValueError('table_name does not exist')
+        else:
+            if not meta.table_name:
+                raise ValueError('table_name is empty')
         # todo create table from shell
         # todo mro
+        print('bases', bases)
+        print('namespace', namespace)
 
         fields = {k: v for k, v in namespace.items()
                   if isinstance(v, Field)}
 
         if hasattr(meta, 'order_by'):
-            if meta.order_by.strip('-') not in fields.keys():
+            if isinstance(meta.order_by, tuple) or isinstance(meta.order_by, list):
+                stripped_order = [i.strip('-') for i in meta.order_by]
+                # print(stripped_order)
+            else:
+                stripped_order = meta.order_by.strip('-')
+                # print(stripped_order)
+
+            if not set(stripped_order).issubset(fields.keys()):
                 raise OrderByFieldError(
-                    'ordering refers to the nonexistent field \'{}\''.format(meta.order_by.strip('-')))
+                    'ordering refers to the nonexistent field \'{}\''.format(stripped_order))
 
         namespace['_fields'] = fields
         namespace['_table_name'] = meta.table_name
@@ -42,6 +55,7 @@ class ModelMeta(type):
 
 class Manage:
     # todo order by
+    # set(['a', 'b']).issubset(['a', 'b', 'c'])
     # todo queryset slices
     # todo filter
 
@@ -57,6 +71,8 @@ class Manage:
     def all(self):
         """get all rows from table"""
         select_query = """SELECT * from {}""".format(self._table_name)
+        # if self._order_by:
+
         self.cursor.execute(select_query)
 
         res = self.cursor.fetchall()
@@ -88,6 +104,7 @@ class Manage:
             self.model_cls = owner
 
         setattr(self, '_table_name', owner._table_name)
+        setattr(self, '_order_by', owner._order_by)
         return self
 
     def create(self, *_, **kwargs):
@@ -138,14 +155,32 @@ class Model(metaclass=ModelMeta):
             raise DeleteError('{} object can\'t be deleted because its id is incorrect.'.
                               format(self._table_name))
 
+    def check_fields(self):
+        """return exception if required field is none"""
+        # print('fields', self._fields)
+        for field_name, field in self._fields.items():
+            # print(getattr(self, field_name) == "None")
+            # print(field.required)
+
+            if (getattr(self, field_name) is None or getattr(self, field_name) == "None") and field.required:
+                raise IntegrityError(
+                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self, field_name), field_name))
+
     def save(self):
         """update if exists in db or create if not"""
         object_fields = ['id', *list(self._fields.keys())]
+        self.check_fields()
 
         if self.__dict__.get('id') is not None:
+
             set_arr = []
             for i in object_fields:
-                set_arr.append("{}=\'{}\'".format(i, getattr(self, i)))
+                attr_value = getattr(self, i)
+
+                if attr_value is None:
+                    set_arr.append("{}=null".format(i))
+                else:
+                    set_arr.append("{}=\'{}\'".format(i, attr_value))
 
             update_query = """
                 UPDATE {}
@@ -161,22 +196,23 @@ class Model(metaclass=ModelMeta):
             # object_values = [self.__dict__.get('id', 'DEFAULT'), *list(self._fields.values())]
             # print('object_fields', object_fields)
             # print('object_values', object_values)
+            # print([(i, getattr(self, i)) for i in object_fields])
             values = []
             for i in object_fields:
                 if getattr(self, i) is not None:
-                    values.append(format("\'{}\'").format(i))
+                    values.append(format("\'{}\'").format(getattr(self, i)))
                 else:
                     if i == 'id':
                         values.append('DEFAULT')
                     else:
                         values.append("null")
-
+            # print(values)
             insert_query = """
                         INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;
                     """.format(self._table_name,
                                ', '.join(object_fields),
                                ', '.join(values))
-            # print(insert_query)
+            # print('INESRT QUERY FROM SAVE METHOD', insert_query)
             self.cursor.execute(insert_query)
             self.connection.commit()
 

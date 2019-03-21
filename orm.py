@@ -1,12 +1,17 @@
-from my_models import User
+from my_models import User, Man
 import datetime
 
 if __name__ == '__main__':
-    # user = User(name='name')
+    # user = User(name=1)
     # print(user.__dict__)
     # user.name = 'new_new'
     # user.save()
-    #
+    # print(user.__dict__)
+    # user.coins = '228.98'
+    # user.save()
+    # print(user.coins)
+
+    # print(User.objects.all())
     #
     # user_obj = User.objects.get(id=49)
     # user_obj.delete()
@@ -14,11 +19,9 @@ if __name__ == '__main__':
     #
     # user = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(), description='im fucker',
     #                            coins=123.3)
-    # user.coins = '228.98'
-    # user.save()
     # print(user.coins)
 
-    print(User.objects.get(id=106).coins)
+    # print(User.objects.get(id=106).coins)
     # print(User.objects.create())
 
     #
@@ -33,3 +36,7 @@ if __name__ == '__main__':
 
     # todo filter
     # User.objects.filter(id=2).filter(name='petya')
+
+    m = Man()
+
+

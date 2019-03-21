@@ -1,4 +1,5 @@
 import datetime
+from exceptions import IntegrityError
 
 
 class Field:
@@ -14,8 +15,6 @@ class Field:
         if value is None and not self.required:
             return None
 
-        # todo exceptions
-
         if self.f_type == datetime.datetime:
             if isinstance(value, datetime.datetime):
                 return value
@@ -23,6 +22,8 @@ class Field:
                 return datetime.datetime(*value)
             elif isinstance(value, dict):
                 return datetime.datetime(**value)
+            else:
+                raise IntegrityError("wrong data insert to {}".format(self.f_type))
 
         return self.f_type(value)
 
@@ -45,3 +46,8 @@ class DateField(Field):
 class FloatField(Field):
     def __init__(self, required=False, default=None):
         super().__init__(float, required, default)
+
+
+class BooleanField(Field):
+    def __init__(self, required=False, default=None):
+        super().__init__(bool, required, default)

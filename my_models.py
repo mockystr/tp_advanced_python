@@ -1,13 +1,15 @@
 from model import Model
-from fields import StringField, IntField, DateField, FloatField
+from fields import StringField, IntField, DateField, FloatField, BooleanField
 
 
 class User(Model):
+    # todo add params to field constructor
     name = StringField(required=True)
     description = StringField()
     date_added = DateField()
     age = IntField()
     coins = FloatField()
+    is_superuser = BooleanField()
 
     def __str__(self):
         return 'User {}'.format(self.name, self.age)
@@ -20,7 +22,11 @@ class User(Model):
 
     class Meta:
         table_name = 'ormtable'
-        order_by = '-name'
+        order_by = ('-name', '-description')
 
-# class Man(User):
-#     sex = StringField()
+
+class Man(User):
+    sex = StringField()
+
+    class Meta:
+        table_name = 'Man'

@@ -16,3 +16,7 @@ class DuplicateKeyConstraint(Exception):
 
 class OrderByFieldError(Exception):
     pass
+
+
+class IntegrityError(Exception):
+    pass
