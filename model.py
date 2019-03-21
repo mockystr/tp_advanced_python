@@ -5,12 +5,19 @@ from exceptions import (MultipleObjectsReturned,
                         DeleteError,
                         DuplicateKeyConstraint,
                         OrderByFieldError,
-                        IntegrityError)
+                        IntegrityError,
+                        ParentClashError)
 from constants import (user_db_constant,
                        password_db_constant,
                        host_db_constant,
                        port_db_constant,
                        database_db_constant)
+
+"""
+КОСТЫЛИ:
+name == 'None'
+
+"""
 
 
 class ModelMeta(type):
@@ -27,13 +34,22 @@ class ModelMeta(type):
         else:
             if not meta.table_name:
                 raise ValueError('table_name is empty')
+
         # todo create table from shell
         # todo mro
-        print('bases', bases)
-        print('namespace', namespace)
 
-        fields = {k: v for k, v in namespace.items()
-                  if isinstance(v, Field)}
+        # print('bases[0] dict', bases[0].__dict__.items())
+        # print('namespace', namespace)
+
+        if len(bases) > 1:
+            raise ParentClashError("You can't inherit more than one table!")
+
+        if bases[0] != Model:
+            fields = {k: v for k, v in [*namespace.items(), *bases[0].__dict__.items()]
+                      if isinstance(v, Field)}
+        else:
+            fields = {k: v for k, v in namespace.items()
+                      if isinstance(v, Field)}
 
         if hasattr(meta, 'order_by'):
             if isinstance(meta.order_by, tuple) or isinstance(meta.order_by, list):
@@ -212,7 +228,6 @@ class Model(metaclass=ModelMeta):
                     """.format(self._table_name,
                                ', '.join(object_fields),
                                ', '.join(values))
-            # print('INESRT QUERY FROM SAVE METHOD', insert_query)
             self.cursor.execute(insert_query)
             self.connection.commit()
 

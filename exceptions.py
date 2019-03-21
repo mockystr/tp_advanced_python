@@ -20,3 +20,7 @@ class OrderByFieldError(Exception):
 
 class IntegrityError(Exception):
     pass
+
+
+class ParentClashError(Exception):
+    pass

@@ -37,6 +37,15 @@ if __name__ == '__main__':
     # todo filter
     # User.objects.filter(id=2).filter(name='petya')
 
-    m = Man()
+    m = Man(name='emir', sex='female', age=15)
+    #
+    print(m.__dict__)
+    #
+    # m.name = 'emir'
+    # m.sex = 'male'
+    # m.age = 15
+    m.save()
+    #
+    # print(m.__dict__)
 
 
