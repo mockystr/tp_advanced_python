@@ -3,7 +3,7 @@ import datetime
 
 if __name__ == '__main__':
     # for i in range(1000):
-    user = User(name=1)
+        # user = User(name=1)
     # print(user.__dict__)
     # user.save()
     # user.coins = '228.98'
@@ -15,12 +15,12 @@ if __name__ == '__main__':
     # user_obj = User.objects.get(id=300)
     # print(user_obj)
 
-    # user = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(), description='im fucker',
-    #                            coins=123.3)
+    # user_obj = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(),
+    #                                description='im',
+    #                                coins=123.3)
     # user_obj.delete()
     #
-    #
-    # print(user.coins)
+    # print(user_obj.coins)
 
     # print(User.objects.get(id=106).coins)
     # print(User.objects.create())
@@ -49,4 +49,4 @@ if __name__ == '__main__':
     #
     # print(m.__dict__)
     #
-    # print(Man.objects.filter(name='emir'))
+    # print(Man.objects.filter(name='1'))

@@ -1,3 +1,5 @@
+from typing import List
+
 import psycopg2
 from fields import Field
 from exceptions import (MultipleObjectsReturned,
@@ -39,6 +41,7 @@ class ModelMeta(type):
         if not hasattr(meta, 'table_name'):
             raise ValueError('table_name does not exist')
         else:
+            # todo generate table name from class name
             if not meta.table_name:
                 raise ValueError('table_name is empty')
 
@@ -50,6 +53,7 @@ class ModelMeta(type):
 
         if len(bases) > 1:
             raise ParentClashError("You can't inherit more than one table!")
+        # todo use fields from base class
 
         if bases[0] != Model:
             fields = {k: v for k, v in [*namespace.items(), *bases[0].__dict__.items()]
@@ -57,7 +61,6 @@ class ModelMeta(type):
         else:
             fields = {k: v for k, v in namespace.items()
                       if isinstance(v, Field)}
-
         if hasattr(meta, 'order_by'):
             if isinstance(meta.order_by, (tuple, list)):
                 stripped_order = [i.strip('-') for i in meta.order_by]
@@ -76,6 +79,46 @@ class ModelMeta(type):
         namespace['_table_name'] = meta.table_name
         namespace['_order_by'] = getattr(meta, 'order_by', None)
         return super().__new__(mcs, name, bases, namespace)
+
+
+class Condition:
+    def __init__(self, field, cond, value):
+        pass
+
+
+class SelectQuerySet:
+    def __init__(self, model_cls, fields, where=None, order_by=None):
+        self.model_cls = model_cls
+        self.fields = fields
+        self.where: List = where
+        self.order_by: List = order_by
+        self.res = None
+
+    def filter(self, *_, **kwargs):
+        for k, v in kwargs.items():
+            self.where.append(Condition(...))
+
+    def order_by(self):
+        pass
+
+    def count(self):
+        query = self._build(True)
+        # todo perform
+        return 1
+
+    def _build(self, get_count=False):
+        query = ["SELECT "]
+        if get_count:
+            query.append('count(*)')
+        else:
+            # todo fields
+            query.append(...)
+        query.append(self.where)
+        ...
+
+    def __iter__(self):
+        # todo res
+        return iter(self.res)
 
 
 class Manage:
@@ -130,7 +173,7 @@ class Manage:
         if self.formatted_order:
             select_filter_query += " ORDER BY {}".format(', '.join(self.formatted_order))
 
-        print(select_filter_query)
+        # print(select_filter_query)
 
         cursor.execute(select_filter_query)
         res = cursor.fetchall()
