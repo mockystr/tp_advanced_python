@@ -2,16 +2,24 @@ from my_models import User, Man
 import datetime
 
 if __name__ == '__main__':
-    # for i in range(1000):
-        # user = User(name=1)
+
+    # from itertools import combinations
+    #
+    # x = 'abcde'
+    # for i in [*range(10), *[''.join(l) for i in range(len(x)) for l in combinations(x, i + 1)]]:
+    #     User(name=i).save()
     # print(user.__dict__)
     # user.save()
     # user.coins = '228.98'
     # user.save()
     # print(user.coins)
 
-    # print(User.objects.all())
-
+    # print([i for i in User.objects.all()])
+    # users = User.objects.all()
+    # print(users.__dict__)
+    p = User.objects.filter(name='a')[:5]
+    print(p.__dict__)
+    print([i for i in User.objects.filter()[:5]])
     # user_obj = User.objects.get(id=300)
     # print(user_obj)
 

@@ -55,11 +55,17 @@
 
 class A:
     a = 1
+    def __init__(self):
+        self.print123 = '123'
+
+    def print123(self):
+        print('fuck')
 
 
-class B:
+class B(A):
     b = 2
 
+print(A().print123)
 
-b = B()
-print(B.__dict__)
+# b = B()
+# print(b.print123())

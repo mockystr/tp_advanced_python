@@ -15,12 +15,6 @@ from constants import (user_db_constant,
                        port_db_constant,
                        database_db_constant)
 
-"""
-КОСТЫЛИ:
-name == 'None'
-
-"""
-
 connection = psycopg2.connect(user=user_db_constant,
                               password=password_db_constant,
                               host=host_db_constant,
@@ -38,18 +32,13 @@ class ModelMeta(type):
         if meta is None:
             raise ValueError('meta is none')
 
-        if not hasattr(meta, 'table_name'):
-            raise ValueError('table_name does not exist')
+        if hasattr(meta, 'table_name'):
+            namespace['_table_name'] = meta.table_name
         else:
-            # todo generate table name from class name
-            if not meta.table_name:
-                raise ValueError('table_name is empty')
+            namespace['_table_name'] = name
 
         # todo create table from shell
-        # todo mro
 
-        # print('bases[0] dict', bases[0].__dict__.items())
-        # print('namespace', namespace)
 
         if len(bases) > 1:
             raise ParentClashError("You can't inherit more than one table!")
@@ -76,57 +65,120 @@ class ModelMeta(type):
                     'ordering refers to the nonexistent field \'{}\''.format(stripped_order))
 
         namespace['_fields'] = fields
-        namespace['_table_name'] = meta.table_name
         namespace['_order_by'] = getattr(meta, 'order_by', None)
         return super().__new__(mcs, name, bases, namespace)
 
 
-class Condition:
-    def __init__(self, field, cond, value):
-        pass
+# class Condition:
+#     def __init__(self, field, cond, value):
+#         pass
 
 
-class SelectQuerySet:
-    def __init__(self, model_cls, fields, where=None, order_by=None):
+class QuerySet:
+    def __init__(self, model_cls, where=None, limit=None, order_by=None):
         self.model_cls = model_cls
-        self.fields = fields
-        self.where: List = where
-        self.order_by: List = order_by
+        self.fields = self.model_cls._fields
+        self.where: dict = where
         self.res = None
+        self.limit = limit
+        self.__cache = {'count': None}
+
+        if order_by is not None and isinstance(order_by, (list, tuple)):
+            self.order_by: List = order_by
+        else:
+            self.order_by = self.model_cls._order_by
 
     def filter(self, *_, **kwargs):
-        for k, v in kwargs.items():
-            self.where.append(Condition(...))
+        """Get rows that are suitable for condition"""
+        return QuerySet(self.model_cls, where=kwargs)
 
-    def order_by(self):
-        pass
+    # def order_by(self):
+    #     pass
+
+    def format_limit(self):
+        if self.limit:
+            limit_list = []
+
+            if isinstance(self.limit, slice):
+                if self.limit.start:
+                    limit_list.extend(['OFFSET', self.limit.start])
+                if self.limit.stop:
+                    limit_list.extend(['LIMIT', self.limit.stop])
+                return limit_list
+            elif isinstance(self.limit, int):
+                return limit_list.extend(['OFFSET', self.limit, 'LIMIT', 1])
+            else:
+                raise TypeError('unsupported type of limit index')
+        return None
+
+    def format_order_list(self):
+        if self.order_by:
+            formatted_order = []
+
+            if isinstance(self.order_by, (tuple, list)):
+                for i in self.order_by:
+                    if i.startswith('-'):
+                        formatted_order.append("{} DESC".format(i.strip('-')))
+                    else:
+                        formatted_order.append("{}".format(i.strip('-')))
+            else:
+                raise ValueError("ordering can be only tuple or list object")
+
+            return formatted_order
+        return None
+
+    def __getitem__(self, key):
+        # self.limit = key
+        return QuerySet(self.model_cls, self.where, limit=key)
 
     def count(self):
-        query = self._build(True)
-        # todo perform
-        return 1
+        if 'count' in self.__cache.keys() and self.__cache['count'] is not None:
+            return self.__cache['count']
+        return self._count_perform()
 
-    def _build(self, get_count=False):
-        query = ["SELECT "]
-        if get_count:
-            query.append('count(*)')
-        else:
-            # todo fields
-            query.append(...)
-        query.append(self.where)
-        ...
+    def _count_perform(self):
+        query = ['SELECT count(*) from (SELECT * FROM {}'.format(self.model_cls._table_name)]
+
+        if self.limit:
+            query.append('LIMIT {}'.format())
+
+        query.append(') as tmp_table')
+        cursor.execute(''.join(query))
+        return cursor.fetchone()[0]
+
+    def _build(self):
+        query = ["SELECT *"]
+        query.extend(['FROM', self.model_cls._table_name])
+
+        if self.where:
+            query.extend(['WHERE', ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in self.where.items()])])
+
+        formatted_order = self.format_order_list()
+
+        if formatted_order is not None:
+            query.extend(["ORDER BY", ", ".join(formatted_order)])
+
+        print('BUILD QUERY', query)
+        print(' '.join(query))
+
+        cursor.execute(' '.join(query))
+        res = cursor.fetchall()
+
+        self.res = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
+                    range(len(res))]
+
+    def __str__(self):
+        return '<QuerySet table of {}>'.format(self.model_cls._table_name)
 
     def __iter__(self):
         # todo res
+        if self.res is None:
+            self._build()
+
         return iter(self.res)
 
 
 class Manage:
-    # todo order by
-    # set(['a', 'b']).issubset(['a', 'b', 'c'])
-    # todo queryset slices
-    # todo filter
-
     def __init__(self):
         self.model_cls = None
 
@@ -143,43 +195,15 @@ class Manage:
                         self.formatted_order.append("{}".format(i.strip('-')))
             else:
                 raise ValueError("ordering can be only tuple or list object")
-
-        # setattr(self, '_table_name', owner._table_name)
-        # setattr(self, '_order_by', owner._order_by)
         return self
 
     def all(self):
         """Get all rows from table"""
-        select_query = """SELECT * FROM {}""".format(self.model_cls._table_name)
-
-        if self.formatted_order:
-            select_query += " ORDER BY {}".format(', '.join(self.formatted_order))
-
-        # print(select_query)
-
-        cursor.execute(select_query)
-        res = cursor.fetchall()
-
-        res_d = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
-                 range(len(res))]
-        return res_d
+        return QuerySet(self.model_cls)
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        select_filter_query = """
-            SELECT * FROM {0} WHERE {1}
-        """.format(self.model_cls._table_name, ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in kwargs.items()]))
-
-        if self.formatted_order:
-            select_filter_query += " ORDER BY {}".format(', '.join(self.formatted_order))
-
-        # print(select_filter_query)
-
-        cursor.execute(select_filter_query)
-        res = cursor.fetchall()
-        res_d = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
-                 range(len(res))]
-        return res_d
+        return QuerySet(self.model_cls, kwargs)
 
     def get(self, *_, **kwargs):
         """Get only one object"""
@@ -243,14 +267,11 @@ class Model(metaclass=ModelMeta):
 
     def check_fields(self):
         """Return exception if required field is none"""
-        # print('fields', self._fields)
         for field_name, field in self._fields.items():
-            # print(getattr(self, field_name) == "None")
-            # print(field.required)
-
             if (getattr(self, field_name) is None or getattr(self, field_name) == "None") and field.required:
                 raise IntegrityError(
-                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self, field_name), field_name))
+                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self, field_name),
+                                                                         field_name))
 
     def save(self):
         """Update if exists in db or create if not"""
@@ -268,21 +289,12 @@ class Model(metaclass=ModelMeta):
                 else:
                     set_arr.append("{}=\'{}\'".format(i, attr_value))
 
-            update_query = """
-                UPDATE {}
-                SET {}
-                WHERE id={}
-            """.format(self._table_name,
-                       ', '.join(set_arr),
-                       self.id)
-            # print(update_query)
+            update_query = "UPDATE {} SET {} WHERE id={}".format(self._table_name,
+                                                                 ', '.join(set_arr),
+                                                                 self.id)
             cursor.execute(update_query)
             connection.commit()
         else:
-            # object_values = [self.__dict__.get('id', 'DEFAULT'), *list(self._fields.values())]
-            # print('object_fields', object_fields)
-            # print('object_values', object_values)
-            # print([(i, getattr(self, i)) for i in object_fields])
             values = []
             for i in object_fields:
                 if getattr(self, i) is not None:
@@ -292,12 +304,12 @@ class Model(metaclass=ModelMeta):
                         values.append('DEFAULT')
                     else:
                         values.append("null")
-            # print(values)
-            insert_query = """
-                        INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;
-                    """.format(self._table_name,
-                               ', '.join(object_fields),
-                               ', '.join(values))
+
+            insert_query = """INSERT INTO {0} ({1}) 
+                              VALUES ({2})
+                              RETURNING id;""".format(self._table_name,
+                                                      ', '.join(object_fields),
+                                                      ', '.join(values))
             cursor.execute(insert_query)
             connection.commit()
 
