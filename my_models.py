@@ -3,7 +3,6 @@ from fields import StringField, IntField, DateField, FloatField, BooleanField
 
 
 class User(Model):
-    # todo add params to field constructor
     name = StringField(required=True)
     description = StringField()
     date_added = DateField()
@@ -22,7 +21,7 @@ class User(Model):
 
     class Meta:
         table_name = 'ormtable'
-        # order_by = ('name',)
+        order_by = ('name',)
 
 
 class Man(User):

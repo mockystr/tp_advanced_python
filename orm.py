@@ -15,12 +15,15 @@ if __name__ == '__main__':
     # user.save()
     # print(user.coins)
 
-    print([i.age for i in User.objects.all()])
+    # print([i.age for i in User.objects.all()])
     # users = User.objects.all()
     # print(users.__dict__)
     # print(User.objects.filter()[:10].__dict__)
     # print([(i.id, i.name, i.age, i.coins) for i in User.objects.filter()[:10].order_by('-age')])
-    print([i.name for i in User.objects.filter(name='abe').filter(age=2)])
+    # [print('\n', (i.name, i.age, i.coins)) for i in User.objects.filter(name='abe').order_by('-coins', 'age')]
+    p = User.objects.filter(name='abe')[:20].order_by('-coins')[1:3]
+    print([i for i in p])
+    print(p.count())
     # print([(i.age, i.coins) for i in User.objects.filter()[:10].order_by('coins')])
 
     # print([i for i in User.objects.filter()[:5]])

@@ -83,12 +83,16 @@ class QuerySet:
 
         if order_by is not None and isinstance(order_by, (list, tuple)):
             self._order_by: list = order_by
-        elif isinstance(order_by, (list, tuple)):
-            self._order_by = self.model_cls._order_by
+        elif hasattr(self.model_cls, '_order_by'):
+            if isinstance(self.model_cls._order_by, (list, tuple)):
+                self._order_by: list = self.model_cls._order_by
         elif order_by is not None:
             raise ValueError("ordering can be only tuple or list object")
         else:
             self._order_by = None
+
+    def format_where(self):
+        pass
 
     def format_limit(self):
         if self.limit is not None:
@@ -98,7 +102,7 @@ class QuerySet:
                 if self.limit.start:
                     limit_list.extend(['OFFSET', str(self.limit.start)])
                 if self.limit.stop:
-                    limit_list.extend(['LIMIT', str(self.limit.stop)])
+                    limit_list.extend(['LIMIT', str(self.limit.stop - (self.limit.start or 0))])
                 return limit_list
             elif isinstance(self.limit, int):
                 limit_list.extend(['OFFSET', self.limit, 'LIMIT', 1])
@@ -113,22 +117,32 @@ class QuerySet:
 
             for i in self._order_by:
                 if i.startswith('-'):
-                    formatted_order.append("{} DESC".format(i.strip('-')))
+                    formatted_order.append("{} DESC NULLS LAST".format(i.strip('-')))
                 else:
-                    formatted_order.append("{}".format(i.strip('-')))
+                    formatted_order.append("{} NULLS FIRST".format(i.strip('-')))
             return formatted_order
         return None
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        # self.where = {self.where, k}
-        return QuerySet(self.model_cls, where={**self.where, **kwargs},
-                        limit=self.limit, order_by=self._order_by,
-                        res=self.res)
+        self.where = {**self.where, **kwargs}
+        return self
 
     def __getitem__(self, key):
-        return QuerySet(self.model_cls, where=self.where, limit=key, order_by=self._order_by,
-                        res=self.res)
+        if isinstance(key, int):
+            return self.model_cls.objects.get(self.fields.id)
+        if isinstance(key, slice):
+            if self.limit is not None:
+                if key.stop:
+                    if self.limit.stop:
+                        self.limit = slice(max(self.limit.start or 0, key.start or 0), min(self.limit.stop, key.stop))
+                    else:
+                        self.limit.stop = slice(max(self.limit.start or 0, key.start or 0), )
+            else:
+                self.limit = key
+            return self
+        else:
+            raise TypeError('wrong index')
 
     def order_by(self, *args):
         if isinstance(args, (tuple, list)):
@@ -139,8 +153,11 @@ class QuerySet:
         else:
             raise ValueError("ordering can be only tuple or list object")
 
-        self._order_by = args
-        return QuerySet(self.model_cls, self.where, )
+        if self._order_by is not None:
+            self._order_by = [*self._order_by, *args]
+        else:
+            self._order_by = args
+        return self
 
     def reverse(self):
         if self.res is not None:
@@ -150,7 +167,6 @@ class QuerySet:
 
     def count(self):
         if 'count' in self.__cache.keys() and self.__cache['count'] != -1:
-            print('from cache')
             return self.__cache['count']
         return self._count_perform()
 
@@ -162,11 +178,14 @@ class QuerySet:
 
         query = ['SELECT count(*) from (SELECT * FROM {}'.format(self.model_cls._table_name)]
 
+        if self.where:
+            query.extend(['WHERE', ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in self.where.items()])])
+
         if self.limit:
-            query.append('LIMIT {}'.format())
+            query.extend(self.format_limit())
 
         query.append(') as tmp_table')
-        cursor.execute(''.join(query))
+        cursor.execute(' '.join(query))
         res_len = cursor.fetchone()[0]
         self.__cache['count'] = res_len
         return res_len
@@ -191,15 +210,17 @@ class QuerySet:
 
         cursor.execute(' '.join(query))
         res = cursor.fetchall()
+        print('res build ', res)
+        print('self limit', self.limit)
         self.res = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
                     range(len(res))]
 
     def __str__(self):
         return '<QuerySet of {}>'.format(self.model_cls._table_name)
 
-    def __repr__(self):
-        self._build()
-        return '<model.QuerySet ({})>'.format(self.res)
+    # def __repr__(self):
+    #     self._build()
+    #     return '<model.QuerySet ({})>'.format(self.res)
 
     def __iter__(self):
         if self.res is None:
