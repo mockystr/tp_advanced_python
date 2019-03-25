@@ -39,7 +39,6 @@ class ModelMeta(type):
 
         # todo create table from shell
 
-
         if len(bases) > 1:
             raise ParentClashError("You can't inherit more than one table!")
         # todo use fields from base class
@@ -50,13 +49,10 @@ class ModelMeta(type):
         else:
             fields = {k: v for k, v in namespace.items()
                       if isinstance(v, Field)}
+
         if hasattr(meta, 'order_by'):
             if isinstance(meta.order_by, (tuple, list)):
                 stripped_order = [i.strip('-') for i in meta.order_by]
-                # print(stripped_order)
-            # elif isinstance(meta.order_by, str):
-            #     stripped_order = meta.order_by.strip('-')
-            #     # print(stripped_order)
             else:
                 raise ValueError("ordering can be only tuple or list object")
 
@@ -73,70 +69,97 @@ class ModelMeta(type):
 #     def __init__(self, field, cond, value):
 #         pass
 
+# todo self.res to init
+# return self => return QuetySet
 
 class QuerySet:
-    def __init__(self, model_cls, where=None, limit=None, order_by=None):
+    def __init__(self, model_cls, where=None, limit=None, order_by=None, res=None):
         self.model_cls = model_cls
         self.fields = self.model_cls._fields
         self.where: dict = where
-        self.res = None
+        self.res = res
         self.limit = limit
-        self.__cache = {'count': None}
+        self.__cache = {'count': -1}
 
         if order_by is not None and isinstance(order_by, (list, tuple)):
-            self.order_by: List = order_by
+            self._order_by: list = order_by
+        elif isinstance(order_by, (list, tuple)):
+            self._order_by = self.model_cls._order_by
+        elif order_by is not None:
+            raise ValueError("ordering can be only tuple or list object")
         else:
-            self.order_by = self.model_cls._order_by
-
-    def filter(self, *_, **kwargs):
-        """Get rows that are suitable for condition"""
-        return QuerySet(self.model_cls, where=kwargs)
-
-    # def order_by(self):
-    #     pass
+            self._order_by = None
 
     def format_limit(self):
-        if self.limit:
+        if self.limit is not None:
             limit_list = []
 
             if isinstance(self.limit, slice):
                 if self.limit.start:
-                    limit_list.extend(['OFFSET', self.limit.start])
+                    limit_list.extend(['OFFSET', str(self.limit.start)])
                 if self.limit.stop:
-                    limit_list.extend(['LIMIT', self.limit.stop])
+                    limit_list.extend(['LIMIT', str(self.limit.stop)])
                 return limit_list
             elif isinstance(self.limit, int):
-                return limit_list.extend(['OFFSET', self.limit, 'LIMIT', 1])
+                limit_list.extend(['OFFSET', self.limit, 'LIMIT', 1])
+                return limit_list
             else:
                 raise TypeError('unsupported type of limit index')
         return None
 
     def format_order_list(self):
-        if self.order_by:
+        if self._order_by:
             formatted_order = []
 
-            if isinstance(self.order_by, (tuple, list)):
-                for i in self.order_by:
-                    if i.startswith('-'):
-                        formatted_order.append("{} DESC".format(i.strip('-')))
-                    else:
-                        formatted_order.append("{}".format(i.strip('-')))
-            else:
-                raise ValueError("ordering can be only tuple or list object")
-
+            for i in self._order_by:
+                if i.startswith('-'):
+                    formatted_order.append("{} DESC".format(i.strip('-')))
+                else:
+                    formatted_order.append("{}".format(i.strip('-')))
             return formatted_order
         return None
 
+    def filter(self, *_, **kwargs):
+        """Get rows that are suitable for condition"""
+        # self.where = {self.where, k}
+        return QuerySet(self.model_cls, where={**self.where, **kwargs},
+                        limit=self.limit, order_by=self._order_by,
+                        res=self.res)
+
     def __getitem__(self, key):
-        # self.limit = key
-        return QuerySet(self.model_cls, self.where, limit=key)
+        return QuerySet(self.model_cls, where=self.where, limit=key, order_by=self._order_by,
+                        res=self.res)
+
+    def order_by(self, *args):
+        if isinstance(args, (tuple, list)):
+            stripped_order = [i.strip('-') for i in args]
+            if not set(stripped_order).issubset(self.model_cls._fields.keys()):
+                raise OrderByFieldError('ordering refers to the nonexistent field \'{}\''.
+                                        format(stripped_order))
+        else:
+            raise ValueError("ordering can be only tuple or list object")
+
+        self._order_by = args
+        return QuerySet(self.model_cls, self.where, )
+
+    def reverse(self):
+        if self.res is not None:
+            if isinstance(self.res, list):
+                self.res.reverse()
+        return self
 
     def count(self):
-        if 'count' in self.__cache.keys() and self.__cache['count'] is not None:
+        if 'count' in self.__cache.keys() and self.__cache['count'] != -1:
+            print('from cache')
             return self.__cache['count']
         return self._count_perform()
 
     def _count_perform(self):
+        if self.res is not None:
+            res_len = len(self.res)
+            self.__cache['count'] = res_len
+            return res_len
+
         query = ['SELECT count(*) from (SELECT * FROM {}'.format(self.model_cls._table_name)]
 
         if self.limit:
@@ -144,7 +167,9 @@ class QuerySet:
 
         query.append(') as tmp_table')
         cursor.execute(''.join(query))
-        return cursor.fetchone()[0]
+        res_len = cursor.fetchone()[0]
+        self.__cache['count'] = res_len
+        return res_len
 
     def _build(self):
         query = ["SELECT *"]
@@ -154,24 +179,29 @@ class QuerySet:
             query.extend(['WHERE', ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in self.where.items()])])
 
         formatted_order = self.format_order_list()
-
         if formatted_order is not None:
             query.extend(["ORDER BY", ", ".join(formatted_order)])
 
-        print('BUILD QUERY', query)
+        formated_limit = self.format_limit()
+        if formated_limit is not None:
+            query.extend(formated_limit)
+
+        # print('BUILD QUERY', query)
         print(' '.join(query))
 
         cursor.execute(' '.join(query))
         res = cursor.fetchall()
-
         self.res = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
                     range(len(res))]
 
     def __str__(self):
-        return '<QuerySet table of {}>'.format(self.model_cls._table_name)
+        return '<QuerySet of {}>'.format(self.model_cls._table_name)
+
+    def __repr__(self):
+        self._build()
+        return '<model.QuerySet ({})>'.format(self.res)
 
     def __iter__(self):
-        # todo res
         if self.res is None:
             self._build()
 
@@ -185,16 +215,6 @@ class Manage:
     def __get__(self, instance, owner):
         if self.model_cls is None:
             self.model_cls = owner
-            self.formatted_order = []
-
-            if isinstance(self.model_cls._order_by, (tuple, list)):
-                for i in self.model_cls._order_by:
-                    if i.startswith('-'):
-                        self.formatted_order.append("{} DESC".format(i.strip('-')))
-                    else:
-                        self.formatted_order.append("{}".format(i.strip('-')))
-            else:
-                raise ValueError("ordering can be only tuple or list object")
         return self
 
     def all(self):
