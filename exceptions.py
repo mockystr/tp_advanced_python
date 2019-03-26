@@ -24,3 +24,7 @@ class IntegrityError(Exception):
 
 class ParentClashError(Exception):
     pass
+
+
+class LookupError(Exception):
+    pass

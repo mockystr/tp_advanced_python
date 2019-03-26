@@ -8,7 +8,8 @@ from exceptions import (MultipleObjectsReturned,
                         DuplicateKeyConstraint,
                         OrderByFieldError,
                         IntegrityError,
-                        ParentClashError)
+                        ParentClashError,
+                        LookupError)
 from constants import (user_db_constant,
                        password_db_constant,
                        host_db_constant,
@@ -65,12 +66,37 @@ class ModelMeta(type):
         return super().__new__(mcs, name, bases, namespace)
 
 
-# class Condition:
-#     def __init__(self, field, cond, value):
-#         pass
+class Condition:
+    def __init__(self, field_name, cond, value):
+        self._conditions = ['exact', 'in', 'lt', 'gt', 'le', 'ge', 'contains', 'startswith', 'endswith']
+        self.field_name = field_name
+        self.cond = cond
+        self.value = value
 
-# todo self.res to init
-# return self => return QuetySet
+    def format_cond(self):
+        print(self.field_name, self.cond, self.value)
+        if self.cond in self._conditions:
+            if self.cond == 'exact':
+                return "{}={}".format(self.field_name, self.value)
+            if self.cond == 'in':
+                return "{} IN {}".format(self.field_name, tuple(self.value))
+            if self.cond == 'lt':
+                return "{} < {}".format(self.field_name, self.value)
+            if self.cond == 'gt':
+                return "{} > {}".format(self.field_name, self.value)
+            if self.cond == 'le':
+                return "{} <= {}".format(self.field_name, self.value)
+            if self.cond == 'ge':
+                return "{} >= {}".format(self.field_name, self.value)
+            if self.cond == 'contains':
+                return "{} LIKE '%{}%' ESCAPE '\\'".format(self.field_name, self.value)
+            if self.cond == 'startswith':
+                return "{} LIKE '{}%' ESCAPE '\\'".format(self.field_name, self.value)
+            if self.cond == 'endswith':
+                return "{} LIKE '%{}' ESCAPE '\\'".format(self.field_name, self.value)
+
+
+# todo reverse method
 
 class QuerySet:
     def __init__(self, model_cls, where=None, limit=None, order_by=None, res=None):
@@ -79,7 +105,7 @@ class QuerySet:
         self.where: dict = where
         self.res = res
         self.limit = limit
-        self.__cache = {'count': -1}
+        self.__cache = {'count': -1, 'order_by': 0}
 
         if order_by is not None and isinstance(order_by, (list, tuple)):
             self._order_by: list = order_by
@@ -92,7 +118,17 @@ class QuerySet:
             self._order_by = None
 
     def format_where(self):
-        pass
+        if self.where:
+            where_list = []
+
+            for i in self.where.items():
+                ispl = i[0].split('__')
+                if len(ispl) == 2:
+                    where_list.append(Condition(ispl[0], ispl[1], i[1]).format_cond())
+                if len(ispl) == 1:
+                    where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
+            return where_list
+        return None
 
     def format_limit(self):
         if self.limit is not None:
@@ -105,7 +141,7 @@ class QuerySet:
                     limit_list.extend(['LIMIT', str(self.limit.stop - (self.limit.start or 0))])
                 return limit_list
             elif isinstance(self.limit, int):
-                limit_list.extend(['OFFSET', self.limit, 'LIMIT', 1])
+                limit_list.extend(['OFFSET', str(self.limit), 'LIMIT', '1'])
                 return limit_list
             else:
                 raise TypeError('unsupported type of limit index')
@@ -125,19 +161,35 @@ class QuerySet:
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        self.where = {**self.where, **kwargs}
+        if self.where is not None:
+            self.where = {**self.where, **kwargs}
+        else:
+            self.where = kwargs
         return self
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return self.model_cls.objects.get(self.fields.id)
-        if isinstance(key, slice):
+            self.limit = key
+            return self
+        elif isinstance(key, slice):
             if self.limit is not None:
                 if key.stop:
                     if self.limit.stop:
-                        self.limit = slice(max(self.limit.start or 0, key.start or 0), min(self.limit.stop, key.stop))
+                        max_start = max(self.limit.start or 0, key.start or 0)
+                        min_stop = min(self.limit.stop, key.stop)
+                        if max_start < min_stop:
+                            self.limit = slice(max_start,
+                                               min_stop,
+                                               None)
+                        else:
+                            self.limit = slice((self.limit.start or 0) + (key.start or 0),
+                                               min(self.limit.stop,
+                                                   (self.limit.start or 0) + key.stop),
+                                               None)
                     else:
-                        self.limit.stop = slice(max(self.limit.start or 0, key.start or 0), )
+                        self.limit = slice(max(self.limit.start or 0, key.start or 0), key.stop, None)
+                else:
+                    self.limit = slice(max(self.limit.start or 0, key.start or 0), getattr(self.limit, 'stop'), None)
             else:
                 self.limit = key
             return self
@@ -154,7 +206,11 @@ class QuerySet:
             raise ValueError("ordering can be only tuple or list object")
 
         if self._order_by is not None:
-            self._order_by = [*self._order_by, *args]
+            if self.__cache['order_by'] == 0:
+                self._order_by = args
+                self.__cache['order_by'] = 1
+            else:
+                self._order_by = [*self._order_by, *args]
         else:
             self._order_by = args
         return self
@@ -176,15 +232,15 @@ class QuerySet:
             self.__cache['count'] = res_len
             return res_len
 
-        query = ['SELECT count(*) from (SELECT * FROM {}'.format(self.model_cls._table_name)]
+        query = ['SELECT count(*) FROM (SELECT * FROM {}'.format(self.model_cls._table_name)]
 
         if self.where:
-            query.extend(['WHERE', ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in self.where.items()])])
-
+            query.extend(['WHERE', ' AND '.join(self.format_where())])
         if self.limit:
             query.extend(self.format_limit())
 
         query.append(') as tmp_table')
+        print(' '.join(query))
         cursor.execute(' '.join(query))
         res_len = cursor.fetchone()[0]
         self.__cache['count'] = res_len
@@ -195,23 +251,19 @@ class QuerySet:
         query.extend(['FROM', self.model_cls._table_name])
 
         if self.where:
-            query.extend(['WHERE', ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in self.where.items()])])
+            query.extend(['WHERE', ' AND '.join(self.format_where())])
 
-        formatted_order = self.format_order_list()
-        if formatted_order is not None:
-            query.extend(["ORDER BY", ", ".join(formatted_order)])
+        if self._order_by is not None:
+            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
 
-        formated_limit = self.format_limit()
-        if formated_limit is not None:
-            query.extend(formated_limit)
+        if self.limit is not None:
+            query.extend(self.format_limit())
 
         # print('BUILD QUERY', query)
         print(' '.join(query))
 
         cursor.execute(' '.join(query))
         res = cursor.fetchall()
-        print('res build ', res)
-        print('self limit', self.limit)
         self.res = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
                     range(len(res))]
 
@@ -289,6 +341,14 @@ class Model(metaclass=ModelMeta):
 
     objects = Manage()
 
+    def check_fields(self):
+        """Return exception if required field is none"""
+        for field_name, field in self._fields.items():
+            if (getattr(self, field_name) is None or getattr(self, field_name) == "None") and field.required:
+                raise IntegrityError(
+                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self, field_name),
+                                                                         field_name))
+
     def delete(self):
         """Delete object"""
         if self.id is None:
@@ -305,14 +365,6 @@ class Model(metaclass=ModelMeta):
         except Exception:
             raise DeleteError('{} object can\'t be deleted because its id is incorrect.'.
                               format(self._table_name))
-
-    def check_fields(self):
-        """Return exception if required field is none"""
-        for field_name, field in self._fields.items():
-            if (getattr(self, field_name) is None or getattr(self, field_name) == "None") and field.required:
-                raise IntegrityError(
-                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self, field_name),
-                                                                         field_name))
 
     def save(self):
         """Update if exists in db or create if not"""
