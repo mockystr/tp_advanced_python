@@ -18,7 +18,7 @@ class Field:
         if self.f_type == datetime.datetime:
             if isinstance(value, datetime.datetime):
                 return value
-            elif isinstance(value, list) or isinstance(value, tuple):
+            elif isinstance(value, (list, tuple)):
                 return datetime.datetime(*value)
             elif isinstance(value, dict):
                 return datetime.datetime(**value)

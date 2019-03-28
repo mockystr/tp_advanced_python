@@ -8,6 +8,10 @@ if __name__ == '__main__':
     # x = 'abcdefg'
     # for i,k in zip(range(50), [''.join(l) for i in range(len(x)) for l in combinations(x, i + 1)]):
     #     User(name=k, age=random.randint(-i, i), coins=random.randint(0, i*100)).save()
+    # user = User.objects.get(id=2528)
+    # user.name = 'emirl3'
+    # user.save()
+    print()
 
     # print(user.__dict__)
     # user.save()
@@ -30,14 +34,17 @@ if __name__ == '__main__':
     # print([i for i in User.objects.all()[5]])
     # print([i for i in User.objects.all()[10:50].filter()[2:5]])
     # print([i for i in User.objects.all()[10:30].filter()[:25].filter()[2:9]])
-    # print([i for i in User.objects.filter(name__startswith='em', age=5)])
+    # print([i for i in User.objects.filter(name__startswith='em')])
     # print(User.objects.all()[10:30].count())
     # print([i for i in User.objects.filter()[:5]])
     # user_obj = User.objects.get(id=300)
     # print(user_obj)
     # print([i for i in User.objects.filter(name__in='ef')])
     # print([i for i in User.objects.filter(id__le=2500)])
-    print([i for i in User.objects.filter(name__endswith='g').filter(id__le=2505)])
+    # qs = User.objects.filter(name__endswith='g').filter(id__le=2505)[:2]
+    # print(qs.__dict__)
+    # print([i for i in qs])
+    # print(qs.__dict__)
     # user_obj = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(),
     #                                description='im',
     #                                coins=123.3)

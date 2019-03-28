@@ -372,7 +372,6 @@ class Model(metaclass=ModelMeta):
         self.check_fields()
 
         if self.__dict__.get('id') is not None:
-
             set_arr = []
             for i in object_fields:
                 attr_value = getattr(self, i)
