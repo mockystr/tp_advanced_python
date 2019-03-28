@@ -45,7 +45,7 @@ class ModelMeta(type):
         # todo use fields from base class
 
         if bases[0] != Model:
-            fields = {k: v for k, v in [*namespace.items(), *bases[0].__dict__.items()]
+            fields = {k: v for k, v in [*namespace.items(), *bases[0]._fields.items()]
                       if isinstance(v, Field)}
         else:
             fields = {k: v for k, v in namespace.items()
@@ -61,6 +61,7 @@ class ModelMeta(type):
                 raise OrderByFieldError(
                     'ordering refers to the nonexistent field \'{}\''.format(stripped_order))
 
+        # print(name, fields)
         namespace['_fields'] = fields
         namespace['_order_by'] = getattr(meta, 'order_by', None)
         return super().__new__(mcs, name, bases, namespace)
@@ -74,26 +75,27 @@ class Condition:
         self.value = value
 
     def format_cond(self):
-        print(self.field_name, self.cond, self.value)
         if self.cond in self._conditions:
             if self.cond == 'exact':
-                return "{}={}".format(self.field_name, self.value)
-            if self.cond == 'in':
+                return "{}='{}'".format(self.field_name, self.value)
+            elif self.cond == 'in':
                 return "{} IN {}".format(self.field_name, tuple(self.value))
-            if self.cond == 'lt':
+            elif self.cond == 'lt':
                 return "{} < {}".format(self.field_name, self.value)
-            if self.cond == 'gt':
+            elif self.cond == 'gt':
                 return "{} > {}".format(self.field_name, self.value)
-            if self.cond == 'le':
+            elif self.cond == 'le':
                 return "{} <= {}".format(self.field_name, self.value)
-            if self.cond == 'ge':
+            elif self.cond == 'ge':
                 return "{} >= {}".format(self.field_name, self.value)
-            if self.cond == 'contains':
+            elif self.cond == 'contains':
                 return "{} LIKE '%{}%' ESCAPE '\\'".format(self.field_name, self.value)
-            if self.cond == 'startswith':
+            elif self.cond == 'startswith':
                 return "{} LIKE '{}%' ESCAPE '\\'".format(self.field_name, self.value)
-            if self.cond == 'endswith':
+            elif self.cond == 'endswith':
                 return "{} LIKE '%{}' ESCAPE '\\'".format(self.field_name, self.value)
+            else:
+                raise LookupError("Unsupported lookup '{}' for {} column.".format(self.cond, self.field_name))
 
 
 # todo reverse method
@@ -270,10 +272,6 @@ class QuerySet:
     def __str__(self):
         return '<QuerySet of {}>'.format(self.model_cls._table_name)
 
-    # def __repr__(self):
-    #     self._build()
-    #     return '<model.QuerySet ({})>'.format(self.res)
-
     def __iter__(self):
         if self.res is None:
             self._build()
@@ -300,9 +298,19 @@ class Manage:
 
     def get(self, *_, **kwargs):
         """Get only one object"""
+
+        where_list = []
+
+        for i in kwargs.items():
+            ispl = i[0].split('__')
+            if len(ispl) == 2:
+                where_list.append(Condition(ispl[0], ispl[1], i[1]).format_cond())
+            if len(ispl) == 1:
+                where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
+
         select_get_query = """
             SELECT * FROM {0} WHERE {1};
-        """.format(self.model_cls._table_name, ' AND '.join(['{}=\'{}\''.format(k, v) for k, v in kwargs.items()]))
+        """.format(self.model_cls._table_name, ' AND '.join(where_list))
 
         cursor.execute(select_get_query)
         res = cursor.fetchall()
@@ -319,12 +327,26 @@ class Manage:
 
     def create(self, *_, **kwargs):
         """Create object"""
+        if not kwargs:
+            raise IntegrityError("no parameters to create")
+
+        for field_name, field in self.model_cls._fields.items():
+            if (getattr(self.model_cls, field_name) is None or getattr(self.model_cls,
+                                                                       field_name) == "None") and field.required:
+                raise IntegrityError(
+                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self.model_cls, field_name),
+                                                                         field_name))
+        edited_kw = {}
+        for field_name, field in kwargs.items():
+            value = getattr(self.model_cls, field_name).validate(kwargs.get(field_name))
+            edited_kw[field_name] = value
+
         insert_query = """
             INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;
         """.format(self.model_cls._table_name,
-                   ', '.join(kwargs.keys()),
-                   ', '.join(map(lambda x: "\'{}\'".format(x), kwargs.values())))
-
+                   ', '.join(edited_kw.keys()),
+                   ', '.join(map(lambda x: "\'{}\'".format(x), edited_kw.values())))
+        print(insert_query)
         cursor.execute(insert_query)
         res = dict(zip([i.name for i in cursor.description], cursor.fetchone()))
         connection.commit()
@@ -368,6 +390,10 @@ class Model(metaclass=ModelMeta):
 
     def save(self):
         """Update if exists in db or create if not"""
+        for field_name, field in self._fields.items():
+            value = field.validate(getattr(self, field_name))
+            setattr(self, field_name, value)
+
         object_fields = ['id', *list(self._fields.keys())]
         self.check_fields()
 
