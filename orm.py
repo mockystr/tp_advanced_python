@@ -26,13 +26,14 @@ if __name__ == '__main__':
     # man.save()
 
     man = Man(description='perfect gamer. registered in 2010',
-              date_added={'year': 2010, 'month': 1, 'day': 1}, age=18,
+              date_added=datetime.datetime.now(), age=18,
               coins=322, is_superuser=False,
               sex='male')
     man.name = 'mockystr'
     man.save()
-    man.date_added = None
-    man.save()
+    # man.date_added = None
+    # man.save()
+    print(man.__dict__)
 
     # print([i.age for i in User.objects.all()])
 
@@ -74,7 +75,7 @@ if __name__ == '__main__':
     # print(user_obj.coins)
 
     # print(User.objects.get(id=106).coins)
-    # user = User(name='i love to fuck', date_added={'year': 2010, 'day': 10, 'month': 10})
+    # user = User(name='i', date_added={'year': 2010, 'day': 10, 'month': 10})
     # user.save()
     # user.date_added = [2010, 12, 12]
     # user.save()

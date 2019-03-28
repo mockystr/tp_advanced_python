@@ -11,19 +11,6 @@ class Field:
     def validate(self, value):
         if value is None and not self.required:
             return None
-
-        if self.f_type == datetime.datetime:
-            if isinstance(value, datetime.datetime):
-                return value
-            elif isinstance(value, (list, tuple)):
-                return datetime.datetime(*value)
-            elif isinstance(value, dict):
-                return datetime.datetime(**value)
-            else:
-                raise IntegrityError("wrong data insert to {}".format(self.f_type))
-        # if value is None and self.required:
-        #     raise IntegrityError("required field is none")
-
         return self.f_type(value)
 
 

@@ -1,5 +1,3 @@
-from typing import List
-
 import psycopg2
 from fields import Field
 from exceptions import (MultipleObjectsReturned,
@@ -42,7 +40,6 @@ class ModelMeta(type):
 
         if len(bases) > 1:
             raise ParentClashError("You can't inherit more than one table!")
-        # todo use fields from base class
 
         if bases[0] != Model:
             fields = {k: v for k, v in [*namespace.items(), *bases[0]._fields.items()]
