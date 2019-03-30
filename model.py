@@ -67,14 +67,22 @@ class ModelMeta(type):
 
 
 class Condition:
-    def __init__(self, field_name, cond, value):
+    def __init__(self, cond, owner_class):
         self._conditions = ['exact', 'in', 'lt', 'gt', 'le', 'ge', 'contains', 'startswith', 'endswith']
-        self.field_name = field_name
-        self.cond = cond
-        self.value = value
+        self.field_name, self.cond, self.value = self.from_string(cond, owner_class)
 
-    def format_string:
-        pass
+    @staticmethod
+    def from_string(cond, owner_class):
+        condspl = cond[0].split('__')
+
+        if condspl[0] not in owner_class._fields.keys():
+            raise LookupError("Cannot resolve keyword '{}' into field. Choices are: {}".
+                              format(condspl[0], ', '.join(owner_class._fields.keys())))
+
+        if len(condspl) == 2:
+            return condspl[0], condspl[1], cond[1]
+        if len(condspl) == 1:
+            return condspl[0], 'exact', cond[1]
 
     def format_cond(self):
         if self.cond in self._conditions:
@@ -100,8 +108,6 @@ class Condition:
                 raise LookupError("Unsupported lookup '{}' for {} column.".format(self.cond, self.field_name))
 
 
-# todo reverse method
-
 class QuerySet:
     def __init__(self, model_cls, where=None, limit=None, order_by=None, res=None):
         self.model_cls = model_cls
@@ -124,14 +130,8 @@ class QuerySet:
     def format_where(self):
         if self.where:
             where_list = []
-
             for i in self.where.items():
-                ispl = i[0].split('__')
-                if len(ispl) == 2:
-                    # todo from_string class method
-                    where_list.append(Condition(ispl[0], ispl[1], i[1]).format_cond())
-                if len(ispl) == 1:
-                    where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
+                where_list.append(Condition(i, self.model_cls).format_cond())
             return where_list
         return None
 
@@ -202,10 +202,6 @@ class QuerySet:
         if isinstance(key, int):
             self.limit = key
             return self._build()
-
-        # todo разделить валидацию, проверить что нет step
-        # получение индекса чтоб приходил один элемент VVVV
-        # разделить: обработка слайса и получение индекса
         elif isinstance(key, slice):
             self.slice_processing(key)
             return self
@@ -317,19 +313,12 @@ class Manage:
 
     def get(self, *_, **kwargs):
         """Get only one object"""
-        # todo кверисет[0]
         where_list = []
-
         for i in kwargs.items():
-            ispl = i[0].split('__')
-            if len(ispl) == 2:
-                where_list.append(Condition(ispl[0], ispl[1], i[1]).format_cond())
-            if len(ispl) == 1:
-                where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
+            where_list.append(Condition(i, self.model_cls).format_cond())
 
         select_get_query = """SELECT * FROM {0} WHERE {1};""".format(self.model_cls._table_name,
                                                                      ' AND '.join(where_list))
-
         cursor.execute(select_get_query)
         res = cursor.fetchall()
 
@@ -341,7 +330,6 @@ class Manage:
                                format(self.model_cls._table_name))
         else:
             res_d = dict(zip([i.name for i in cursor.description], res[0]))
-
         return self.model_cls(**res_d)
 
     def create(self, *_, **kwargs):
@@ -364,7 +352,7 @@ class Manage:
                                                                                     ', '.join(map(
                                                                                         lambda x: "\'{}\'".format(x),
                                                                                         edited_kw.values())))
-        print(insert_query)
+        # print(insert_query)
         cursor.execute(insert_query)
         res = dict(zip([i.name for i in cursor.description], cursor.fetchone()))
         connection.commit()

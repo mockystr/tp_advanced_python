@@ -80,5 +80,9 @@ if __name__ == '__main__':
     # user.date_added = [2010, 12, 12]
     # user.save()
     # print(user.__dict__)
-    print([i for i in User.objects.filter(name__startswith='e').order_by('-name')])
-    print(User.objects.filter(name__startswith='e').order_by('-name')[2])
+
+    # print([i for i in User.objects.filter(name__startswith='e').order_by('-name')])
+    # print(User.objects.filter(name__startswith='e').order_by('-name')[2])
+
+    qs = User.objects.filter(name__startswith='e')
+    print(qs.__dict__)
