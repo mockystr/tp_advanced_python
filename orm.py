@@ -43,8 +43,8 @@ if __name__ == '__main__':
     # print([(i.id, i.name, i.age, i.coins) for i in User.objects.filter()[:10].order_by('-age')])
     # [print('\n', (i.name, i.age, i.coins)) for i in User.objects.filter(name='abe').order_by('-coins', 'age')]
 
-    # p = User.objects.filter(name='abe')[:20].order_by('-coins')[1:3]
-    # print([i.__dict__ for i in p])
+    # p = User.objects.filter(name__startswith='e')[:20].order_by('-name')
+    # print([i for i in p])
     # print(p.count())
 
     # print([i for i in User.objects.all().filter(name__startswith='e').order_by('-name').
@@ -63,10 +63,11 @@ if __name__ == '__main__':
 
     # print([i for i in User.objects.filter(name__in='ef')])
     # print([i for i in User.objects.filter(id__le=2500)])
-    # qs = User.objects.filter(name__endswith='g').filter(id__le=2505)[:2]
+    # qs = User.objects.filter(name__endswith='g').filter(id__le=2505)[:20]
     # print(qs.__dict__)
     # print([i for i in qs])
-    # print(qs.__dict__)
+    # print(qs.count())
+
     # user_obj = User.objects.create(name='emir_name', age=150, date_added=datetime.datetime.now(),
     #                                description='im',
     #                                coins=123.3)
@@ -84,5 +85,9 @@ if __name__ == '__main__':
     # print([i for i in User.objects.filter(name__startswith='e').order_by('-name')])
     # print(User.objects.filter(name__startswith='e').order_by('-name')[2])
 
-    qs = User.objects.filter(name__startswith='e')
-    print(qs.__dict__)
+    # update_int = User.objects.filter(name__startswith='3', age__ge=0).order_by('-name')[:5].update(description='new_52')
+    # print(update_int)
+
+    # delete_int = User.objects.filter(name__startswith='b').order_by('-name')[:7].delete()
+    # print(delete_int)
+    # print([i for i in User.objects.filter(name__startswith='b').order_by('-name')[:7]])

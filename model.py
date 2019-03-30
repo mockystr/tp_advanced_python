@@ -75,13 +75,12 @@ class Condition:
     def from_string(cond, owner_class):
         condspl = cond[0].split('__')
 
-        if condspl[0] not in owner_class._fields.keys():
+        if condspl[0] not in ['id', *owner_class._fields.keys()]:
             raise LookupError("Cannot resolve keyword '{}' into field. Choices are: {}".
                               format(condspl[0], ', '.join(owner_class._fields.keys())))
-
         if len(condspl) == 2:
             return condspl[0], condspl[1], cond[1]
-        if len(condspl) == 1:
+        elif len(condspl) == 1:
             return condspl[0], 'exact', cond[1]
 
     def format_cond(self):
@@ -190,8 +189,9 @@ class QuerySet:
             self.limit = key
 
     def filter(self, *_, **kwargs):
-        # todo сюда засунуть валидацию(есть ли они вообще в модели) и cond
         """Get rows that are suitable for condition"""
+        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
+
         if self.where is not None:
             self.where = {**self.where, **kwargs}
         else:
@@ -211,7 +211,7 @@ class QuerySet:
     def order_by(self, *args):
         if isinstance(args, (tuple, list)):
             stripped_order = [i.strip('-') for i in args]
-            if not set(stripped_order).issubset(self.model_cls._fields.keys()):
+            if not set(stripped_order).issubset(self.fields.keys()):
                 raise OrderByFieldError('ordering refers to the nonexistent field \'{}\''.
                                         format(stripped_order))
         else:
@@ -232,6 +232,39 @@ class QuerySet:
             if isinstance(self.res, list):
                 self.res.reverse()
         return self
+
+    def update(self, *_, **kwargs):
+        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
+        query = ['UPDATE {}'.format(self.model_cls._table_name), 'SET',
+                 ', '.join(["{}='{}'".format(i[0], i[1]) for i in kwargs.items()])]
+        if self.where:
+            query.extend(['WHERE', 'id IN (SELECT id FROM {} WHERE'.format(self.model_cls._table_name),
+                          ' AND '.join(self.format_where())])
+        if self._order_by is not None:
+            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
+        if self.limit:
+            query.extend(self.format_limit())
+        query.append(')')
+
+        # print(' '.join(query))
+        cursor.execute(' '.join(query))
+        connection.commit()
+        return cursor.statusmessage.split()[1]
+
+    def delete(self):
+        [Condition.from_string(i, self.model_cls) for i in list('id', self.fields)]
+        query = ['DELETE FROM {0} WHERE ctid in (SELECT ctid FROM {0}'.format(self.model_cls._table_name)]
+        if self.where:
+            query.extend(['WHERE', ' AND '.join(self.format_where())])
+        if self._order_by is not None:
+            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
+        if self.limit:
+            query.extend(self.format_limit())
+        query.append(')')
+        # print(' '.join(query))
+        cursor.execute(' '.join(query))
+        connection.commit()
+        return cursor.statusmessage.split()[1]
 
     def count(self):
         if 'count' in self.__cache.keys() and self.__cache['count'] != -1:
@@ -309,6 +342,7 @@ class Manage:
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
+        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
         return QuerySet(self.model_cls, kwargs)
 
     def get(self, *_, **kwargs):
