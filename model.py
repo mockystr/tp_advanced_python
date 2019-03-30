@@ -21,8 +21,21 @@ connection = psycopg2.connect(user=user_db_constant,
                               database=database_db_constant)
 cursor = connection.cursor()
 
-
 # todo pipfile pipfile.lock
+"""
+если я правильно понял, то обычный pipfile нужен для того, чтоб указывать конкретные либы и их версии
+а pipfile.lock хранит в себе данные об этих либах и окружении, основываясь на pipfile
+
+
+... and the tool will lookup your virtual environment folder to generate the lock file for you automatically, 
+based on the currently installed versions. The file syntax is not as obvious as is for Pipfile, 
+so for the sake of conciseness, it will not be displayed here.
+
+
+правда я не нашел, для чего там пишут хэши библиотек
+наверно просто их хэшированная версия или что-то такое
+"""
+
 
 class ModelMeta(type):
     def __new__(mcs, name, bases, namespace):
