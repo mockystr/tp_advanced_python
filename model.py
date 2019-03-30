@@ -21,6 +21,7 @@ connection = psycopg2.connect(user=user_db_constant,
                               database=database_db_constant)
 cursor = connection.cursor()
 
+# todo pipfile pipfile.lock
 
 class ModelMeta(type):
     def __new__(mcs, name, bases, namespace):
@@ -123,6 +124,7 @@ class QuerySet:
             for i in self.where.items():
                 ispl = i[0].split('__')
                 if len(ispl) == 2:
+                    # todo from_string class method
                     where_list.append(Condition(ispl[0], ispl[1], i[1]).format_cond())
                 if len(ispl) == 1:
                     where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
@@ -159,6 +161,7 @@ class QuerySet:
         return None
 
     def filter(self, *_, **kwargs):
+        # todo сюда засунуть валидацию(есть ли они вообще в модели) и cond
         """Get rows that are suitable for condition"""
         if self.where is not None:
             self.where = {**self.where, **kwargs}
@@ -170,6 +173,9 @@ class QuerySet:
         if isinstance(key, int):
             self.limit = key
             return self
+        # todo разделить валидацию, проверить что нет step
+        # получение индекса чтоб приходил один элемент
+        # разделить: обработка слайса и получение индекса
         elif isinstance(key, slice):
             if self.limit is not None:
                 if key.stop:
@@ -236,6 +242,7 @@ class QuerySet:
         if self.where:
             query.extend(['WHERE', ' AND '.join(self.format_where())])
         if self.limit:
+            # todo защита от sql injection
             query.extend(self.format_limit())
 
         query.append(') as tmp_table')
@@ -295,7 +302,7 @@ class Manage:
 
     def get(self, *_, **kwargs):
         """Get only one object"""
-
+        # todo кверисет[0]
         where_list = []
 
         for i in kwargs.items():
@@ -305,9 +312,8 @@ class Manage:
             if len(ispl) == 1:
                 where_list.append(Condition(i[0], 'exact', i[1]).format_cond())
 
-        select_get_query = """
-            SELECT * FROM {0} WHERE {1};
-        """.format(self.model_cls._table_name, ' AND '.join(where_list))
+        select_get_query = """SELECT * FROM {0} WHERE {1};""".format(self.model_cls._table_name,
+                                                                     ' AND '.join(where_list))
 
         cursor.execute(select_get_query)
         res = cursor.fetchall()
@@ -316,7 +322,8 @@ class Manage:
             raise MultipleObjectsReturned('get() returned more than one {} -- it returned {}!'.
                                           format(self.model_cls._table_name, len(res)))
         elif len(res) == 0:
-            raise DoesNotExist('{} matching query does not exist.'.format(self.model_cls._table_name))
+            raise DoesNotExist('{} matching query does not exist.'.
+                               format(self.model_cls._table_name))
         else:
             res_d = dict(zip([i.name for i in cursor.description], res[0]))
 
@@ -330,19 +337,18 @@ class Manage:
         for field_name, field in self.model_cls._fields.items():
             if (getattr(self.model_cls, field_name) is None or getattr(self.model_cls,
                                                                        field_name) == "None") and field.required:
-                raise IntegrityError(
-                    'NOT NULL constraint failed: {} in {} column'.format(getattr(self.model_cls, field_name),
-                                                                         field_name))
+                raise IntegrityError('NOT NULL constraint failed: {} in {} column'
+                                     .format(getattr(self.model_cls, field_name), field_name))
         edited_kw = {}
         for field_name, field in kwargs.items():
             value = getattr(self.model_cls, field_name).validate(kwargs.get(field_name))
             edited_kw[field_name] = value
 
-        insert_query = """
-            INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;
-        """.format(self.model_cls._table_name,
-                   ', '.join(edited_kw.keys()),
-                   ', '.join(map(lambda x: "\'{}\'".format(x), edited_kw.values())))
+        insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;""".format(self.model_cls._table_name,
+                                                                                    ', '.join(edited_kw.keys()),
+                                                                                    ', '.join(map(
+                                                                                        lambda x: "\'{}\'".format(x),
+                                                                                        edited_kw.values())))
         print(insert_query)
         cursor.execute(insert_query)
         res = dict(zip([i.name for i in cursor.description], cursor.fetchone()))
@@ -374,11 +380,7 @@ class Model(metaclass=ModelMeta):
             raise DeleteError('{} object can\'t be deleted because its id attribute is set to None.'.
                               format(self._table_name))
         try:
-            delete_query = """
-                DELETE FROM {}
-                WHERE id={}
-            """.format(self._table_name, self.id)
-
+            delete_query = """DELETE FROM {} WHERE id={}""".format(self._table_name, self.id)
             cursor.execute(delete_query)
             connection.commit()
         except Exception:
@@ -420,11 +422,9 @@ class Model(metaclass=ModelMeta):
                     else:
                         values.append("null")
 
-            insert_query = """INSERT INTO {0} ({1}) 
-                              VALUES ({2})
-                              RETURNING id;""".format(self._table_name,
-                                                      ', '.join(object_fields),
-                                                      ', '.join(values))
+            insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;""".format(self._table_name,
+                                                                                         ', '.join(object_fields),
+                                                                                         ', '.join(values))
             cursor.execute(insert_query)
             connection.commit()
 
