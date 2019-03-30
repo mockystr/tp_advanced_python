@@ -25,15 +25,15 @@ if __name__ == '__main__':
     # man.date_added = {'year': 2012, 'month': 10, 'day': 5}
     # man.save()
 
-    man = Man(description='perfect gamer. registered in 2010',
-              date_added=datetime.datetime.now(), age=18,
-              coins=322, is_superuser=False,
-              sex='male')
-    man.name = 'mockystr'
-    man.save()
+    # man = Man(description='perfect gamer. registered in 2010',
+    #           date_added=datetime.datetime.now(), age=18,
+    #           coins=322, is_superuser=False,
+    #           sex='male')
+    # man.name = 'mockystr'
+    # man.save()
     # man.date_added = None
     # man.save()
-    print(man.__dict__)
+    # print(man.__dict__)
 
     # print([i.age for i in User.objects.all()])
 
@@ -80,3 +80,5 @@ if __name__ == '__main__':
     # user.date_added = [2010, 12, 12]
     # user.save()
     # print(user.__dict__)
+    print([i for i in User.objects.filter(name__startswith='e').order_by('-name')])
+    print(User.objects.filter(name__startswith='e').order_by('-name')[2])

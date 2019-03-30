@@ -21,6 +21,7 @@ connection = psycopg2.connect(user=user_db_constant,
                               database=database_db_constant)
 cursor = connection.cursor()
 
+
 # todo pipfile pipfile.lock
 
 class ModelMeta(type):
@@ -71,6 +72,9 @@ class Condition:
         self.field_name = field_name
         self.cond = cond
         self.value = value
+
+    def format_string:
+        pass
 
     def format_cond(self):
         if self.cond in self._conditions:
@@ -160,6 +164,31 @@ class QuerySet:
             return formatted_order
         return None
 
+    def slice_processing(self, key):
+        if key.step:
+            raise ValueError("you cant set step to slice")
+
+        if self.limit is not None:
+            if key.stop:
+                if self.limit.stop:
+                    max_start = max(self.limit.start or 0, key.start or 0)
+                    min_stop = min(self.limit.stop, key.stop)
+                    if max_start < min_stop:
+                        self.limit = slice(max_start,
+                                           min_stop,
+                                           None)
+                    else:
+                        self.limit = slice((self.limit.start or 0) + (key.start or 0),
+                                           min(self.limit.stop,
+                                               (self.limit.start or 0) + key.stop),
+                                           None)
+                else:
+                    self.limit = slice(max(self.limit.start or 0, key.start or 0), key.stop, None)
+            else:
+                self.limit = slice(max(self.limit.start or 0, key.start or 0), getattr(self.limit, 'stop'), None)
+        else:
+            self.limit = key
+
     def filter(self, *_, **kwargs):
         # todo сюда засунуть валидацию(есть ли они вообще в модели) и cond
         """Get rows that are suitable for condition"""
@@ -172,31 +201,13 @@ class QuerySet:
     def __getitem__(self, key):
         if isinstance(key, int):
             self.limit = key
-            return self
+            return self._build()
+
         # todo разделить валидацию, проверить что нет step
-        # получение индекса чтоб приходил один элемент
+        # получение индекса чтоб приходил один элемент VVVV
         # разделить: обработка слайса и получение индекса
         elif isinstance(key, slice):
-            if self.limit is not None:
-                if key.stop:
-                    if self.limit.stop:
-                        max_start = max(self.limit.start or 0, key.start or 0)
-                        min_stop = min(self.limit.stop, key.stop)
-                        if max_start < min_stop:
-                            self.limit = slice(max_start,
-                                               min_stop,
-                                               None)
-                        else:
-                            self.limit = slice((self.limit.start or 0) + (key.start or 0),
-                                               min(self.limit.stop,
-                                                   (self.limit.start or 0) + key.stop),
-                                               None)
-                    else:
-                        self.limit = slice(max(self.limit.start or 0, key.start or 0), key.stop, None)
-                else:
-                    self.limit = slice(max(self.limit.start or 0, key.start or 0), getattr(self.limit, 'stop'), None)
-            else:
-                self.limit = key
+            self.slice_processing(key)
             return self
         else:
             raise TypeError('wrong index')
@@ -270,6 +281,10 @@ class QuerySet:
 
         cursor.execute(' '.join(query))
         res = cursor.fetchall()
+
+        if isinstance(self.limit, int):
+            return self.model_cls(**dict(zip([i.name for i in cursor.description], res[0])))
+
         self.res = [self.model_cls(**dict(zip([ii.name for ii in cursor.description], res[i]))) for i in
                     range(len(res))]
 
