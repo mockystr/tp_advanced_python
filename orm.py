@@ -12,7 +12,7 @@ if __name__ == '__main__':
     # for i,k in zip(range(50), [''.join(l) for i in range(len(x)) for l in combinations(x, i + 1)]):
     #     User(name=k, age=random.randint(-i, i), coins=random.randint(0, i*100)).save()
 
-    # user = User.objects.get(id=2528)
+    # user = Man.objects.get(id=28)
     # print(user.__dict__)
     # user.name = 'asd'
     # print(user.__dict__)
@@ -74,7 +74,6 @@ if __name__ == '__main__':
     #                                coins=123.3)
     # user_obj.delete()
 
-    # print(User.objects.get(id=106).coins)
     # user = User(name='i', date_added={'year': 2010, 'day': 10, 'month': 10})
     # user.save()
     # user.date_added = [2010, 12, 12]
@@ -92,56 +91,47 @@ if __name__ == '__main__':
     # print([i for i in User.objects.filter(name__startswith='a').order_by('-name')[:7]])
 
     """sql injections check"""
-    # kwargs = {'name__startswith': 'a', 'age__le': 0}
-    #
-    # select_get_query = sql.SQL("SELECT * FROM {} WHERE {}".format(sql.Identifier('ormtable'),
-    #                                                               sql.SQL(' ').join(
-    #                                                                   ["%({})s".format(i) for i in kwargs.keys()])))
-    # print(select_get_query)
-    # cursor.execute(select_get_query, {'table_name': "ormtable", **kwargs})
-    # print(cursor.query)
-
     # print([i.name for i in User.objects.filter(name__startswith='\'a')])
-    # SELECT * FROM ormtable WHERE "name" LIKE '''a%' ESCAPE '\' ORDER BY "name" NULLS FIRST
+    # SELECT * FROM "ormtable" WHERE "name" LIKE '''a%' ESCAPE '\' ORDER BY "name" NULLS FIRST
 
     # print([i for i in User.objects.filter(name='\' or 1=1')])
-    # SELECT * FROM ormtable WHERE name=''' or 1=1' ORDER BY name NULLS FIRST
+    # SELECT * FROM "ormtable" WHERE "name"=''' or 1=1' ORDER BY "name" NULLS FIRST
 
     # print([i for i in User.objects.filter(name="'")])
-    # SELECT * FROM ormtable WHERE name='''' ORDER BY name NULLS FIRST
+    # SELECT * FROM "ormtable" WHERE "name"='''' ORDER BY "name" NULLS FIRST
 
     # print([i for i in User.objects.filter(name="'").order_by('name', '-description \' or 1=1')])
     # exceptions.OrderByFieldError: ordering refers to the nonexistent fields: name, description ' or 1=1
 
     # print([i for i in User.objects.filter(age__lt='5\' or 1=1')])
-    # psycopg2.DataError: invalid input syntax for integer: "5' or 1=1"
-    # LINE 1: SELECT * FROM ormtable WHERE age < '5'' or 1=1' ORDER BY nam...
+    # LINE 1: SELECT * FROM "ormtable" WHERE "age" < '5'' or 1=1' ORDER BY...
 
-    # print([i for i in User.objects.filter(name__in=['a', ') SELECT * from ormtable;'])])
-    # SELECT * FROM ormtable WHERE name IN ('a', ') SELECT * from ormtable;') ORDER BY name NULLS FIRST
+    # print([i for i in User.objects.filter(name__in=['a', ')\' SELECT * from ormtable;'])])
+    # SELECT * FROM "ormtable" WHERE "name" IN ('a', ')'' SELECT * from ormtable;') ORDER BY "name" NULLS FIRST
 
     # print([i for i in User.objects.filter(name__contains='a %\' or 1=1')])
-    # SELECT * FROM ormtable WHERE name LIKE '%a %'' or 1=1%' ESCAPE '\' ORDER BY name NULLS FIRST
+    # SELECT * FROM "ormtable" WHERE "name" LIKE '%a %'' or 1=1%' ESCAPE '\' ORDER BY "name" NULLS FIRST
 
     # user = User.objects.create(name='0\');\nDELETE from ormtable where id=2600; --')
     # print(user.id)
 
     # print([i for i in User.objects.filter(name="1\'", age__ge=0).update(name='injection')])
-    # UPDATE ormtable SET name='injection'
-    # WHERE id IN (SELECT id FROM ormtable WHERE name='1'' or 1=1' ORDER BY "name" NULLS FIRST )
+    # UPDATE "ormtable" SET "name"='injection' WHERE id IN (SELECT id FROM "ormtable"
+    # WHERE "name"='1''' AND "age" >= '0' ORDER BY "name" NULLS FIRST )
 
-    # user = User(name='name\'')
-    # user.asd = 'asd'
-    # user.save()
-    # user.name = 'asd\'); select * from ormtable;'
-    # user.save()
-    # user.id = '1 or 1=1'
-    # user.delete()
+    user = User(name='name\'')
+    user.asd = 'asd'
+    user.save()
+    user.name = 'asd\'); select * from ormtable;'
+    user.save()
+    user.id = '1 or 1=1'
+    user.delete()
 
-    # INSERT INTO ormtable (id, name, description, date_added, age, coins, is_superuser)
+    # INSERT INTO "ormtable" ("id", "name", "description", "date_added", "age", "coins", "is_superuser")
     # VALUES (DEFAULT, 'name''', null, null, null, null, null) RETURNING id;
-    # UPDATE ormtable SET id='2623', name='asd''); select * from ormtable;', description=null,
-    # date_added=null, age=null, coins=null, is_superuser=null WHERE id='2623'
+    # UPDATE "ormtable" SET "id"=2640, "name"='asd''); select * from ormtable;',
+    # "description"=null, "date_added"=null, "age"=null, "coins"=null, "is_superuser"=null WHERE id=2640
+    # DELETE FROM "ormtable" WHERE id='1 or 1=1'
     # ValueError: invalid literal for int() with base 10: '1 or 1=1'
     #
     # Traceback (most recent call last):

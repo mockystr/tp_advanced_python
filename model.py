@@ -113,9 +113,9 @@ class Condition:
         #     tmp_value = cond[1]
 
         if len(condspl) == 2:
-            return str(condspl[0]), str(condspl[1]), str(cond[1])
+            return str(condspl[0]), str(condspl[1]), cond[1]
         elif len(condspl) == 1:
-            return str(condspl[0]), 'exact', str(cond[1])
+            return str(condspl[0]), 'exact', cond[1]
         else:
             raise LookupError("unresolved lookup {}".format(cond))
 
@@ -124,23 +124,27 @@ class Condition:
             like_value = str(self.value).replace('\'', '\'\'')
             if self.cond == 'exact':
                 return sql.SQL("{}={}").format(sql.Identifier(self.field_name),
-                                               sql.Literal(self.value)).as_string(cursor)
+                                               sql.Literal(str(self.value))).as_string(cursor)
             elif self.cond == 'in':
-                tmp_compose = sql.Composed(sql.SQL(', ').join([sql.Literal(str(i)) for i in tuple(self.value)]))
+                print(self.value)
+                print(tuple(self.value))
+                # print([sql.Literal(i) for i in self.value])
+                tmp_compose = sql.Composed(sql.SQL(', ').join([sql.Literal(i) for i in tuple(self.value)]))
+                print(tmp_compose)
                 return sql.SQL("{} IN ({})").format(sql.Identifier(self.field_name),
                                                     tmp_compose).as_string(cursor)
             elif self.cond == 'lt':
                 return sql.SQL("{} < {}").format(sql.Identifier(self.field_name),
-                                                 sql.Literal(self.value)).as_string(cursor)
+                                                 sql.Literal(str(self.value))).as_string(cursor)
             elif self.cond == 'gt':
                 return sql.SQL("{} > {}").format(sql.Identifier(self.field_name),
-                                                 sql.Literal(self.value)).as_string(cursor)
+                                                 sql.Literal(str(self.value))).as_string(cursor)
             elif self.cond == 'le':
                 return sql.SQL("{} <= {}").format(sql.Identifier(self.field_name),
-                                                  sql.Literal(self.value)).as_string(cursor)
+                                                  sql.Literal(str(self.value))).as_string(cursor)
             elif self.cond == 'ge':
                 return sql.SQL("{} >= {}").format(sql.Identifier(self.field_name),
-                                                  sql.Literal(self.value)).as_string(cursor)
+                                                  sql.Literal(str(self.value))).as_string(cursor)
             elif self.cond == 'contains':
                 return sql.SQL("{} LIKE '%{}%' ESCAPE '\\'").format(sql.Identifier(self.field_name),
                                                                     sql.SQL(like_value)).as_string(cursor)
@@ -239,9 +243,10 @@ class QuerySet:
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
+        if kwargs:
+            [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
 
-        if self.where is not None:
+        if self.where and kwargs:
             self.where = {**self.where, **kwargs}
         else:
             self.where = kwargs
@@ -297,7 +302,7 @@ class QuerySet:
                           sql.SQL('id IN (SELECT id FROM {} WHERE').format(
                               sql.Identifier(str(self.model_cls._table_name).lower())),
                           sql.SQL(' AND ').join(sql_where)])
-        if self._order_by is not None:
+        if self._order_by:
             query.extend([sql.SQL("ORDER BY"), sql.SQL(", ").join(self.format_order_list())])
         if self.limit:
             query.extend(self.format_limit())
@@ -356,11 +361,11 @@ class QuerySet:
         query = [sql.SQL("SELECT *")]
         query.extend([sql.SQL("FROM"), sql.Identifier(str(self.model_cls._table_name).lower())])
 
-        if self.where is not None:
+        if self.where:
             query.extend([sql.SQL("WHERE"), sql.SQL(" AND ").join([sql.SQL(i) for i in self.format_where()])])
-        if self._order_by is not None:
+        if self._order_by:
             query.extend([sql.SQL("ORDER BY"), sql.SQL(", ").join(self.format_order_list())])
-        if self.limit is not None:
+        if self.limit:
             query.extend(self.format_limit())
 
         # print('BUILD QUERY', query)
@@ -523,7 +528,7 @@ class Model(metaclass=ModelMeta):
                     if i == 'id':
                         values.append(sql.SQL('DEFAULT'))
                     else:
-                        values.append(sql.Literal("null"))
+                        values.append(sql.SQL("null"))
 
             insert_query = sql.SQL("INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;").format(
                 sql.Identifier(str(self._table_name).lower()),
