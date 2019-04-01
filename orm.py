@@ -1,6 +1,8 @@
 from my_models import User, Man
 import datetime
 import random
+from model import cursor
+from psycopg2 import sql
 
 # from itertools import combinations
 
@@ -12,11 +14,11 @@ if __name__ == '__main__':
 
     # user = User.objects.get(id=2528)
     # print(user.__dict__)
-    # user.name = 'new_name'
+    # user.name = 'asd'
     # print(user.__dict__)
     # user.save()
 
-    # man = User.objects.create(name='asd', description='perfect gamer. registered in 2010',
+    # man = User.objects.create(name='as\'d', description='perfect gamer. registered in 2010',
     #                           date_added=[2010, 12, 12], age=18,
     #                           coins=322, is_superuser=False)
     # print(man.__dict__)
@@ -49,11 +51,11 @@ if __name__ == '__main__':
     # print([i for i in User.objects.all().filter(name__startswith='e').order_by('-name').
     #       order_by('description').order_by('coins')])
 
-    # print(User.objects.all()[:25].filter(age__ge=-15)[20:].filter()[:10].count())
+    # print(User.objects.all()[:25].filter(name__startswith='\'a')[20:].filter()[:10].count())
 
-    # print([i for i in User.objects.all()[5]])
+    # print(User.objects.all().order_by('-name').filter(name__startswith='a')[5])
 
-    # user_obj = User.objects.get(id=2538)
+    # user_obj = User.objects.get(name='new_edit_after_get', id=2538)
     # print(user_obj.__dict__)
     # user_obj.name = 'new_edit_after_get'
     # user_obj.save()
@@ -71,8 +73,6 @@ if __name__ == '__main__':
     #                                description='im',
     #                                coins=123.3)
     # user_obj.delete()
-    #
-    # print(user_obj.coins)
 
     # print(User.objects.get(id=106).coins)
     # user = User(name='i', date_added={'year': 2010, 'day': 10, 'month': 10})
@@ -92,6 +92,18 @@ if __name__ == '__main__':
     # print([i for i in User.objects.filter(name__startswith='a').order_by('-name')[:7]])
 
     """sql injections check"""
+    # kwargs = {'name__startswith': 'a', 'age__le': 0}
+    #
+    # select_get_query = sql.SQL("SELECT * FROM {} WHERE {}".format(sql.Identifier('ormtable'),
+    #                                                               sql.SQL(' ').join(
+    #                                                                   ["%({})s".format(i) for i in kwargs.keys()])))
+    # print(select_get_query)
+    # cursor.execute(select_get_query, {'table_name': "ormtable", **kwargs})
+    # print(cursor.query)
+
+    # print([i.name for i in User.objects.filter(name__startswith='\'a')])
+    # SELECT * FROM ormtable WHERE "name" LIKE '''a%' ESCAPE '\' ORDER BY "name" NULLS FIRST
+
     # print([i for i in User.objects.filter(name='\' or 1=1')])
     # SELECT * FROM ormtable WHERE name=''' or 1=1' ORDER BY name NULLS FIRST
 
@@ -114,7 +126,7 @@ if __name__ == '__main__':
     # user = User.objects.create(name='0\');\nDELETE from ormtable where id=2600; --')
     # print(user.id)
 
-    # print([i for i in User.objects.filter(name="1\' or 1=1").update(name='injection')])
+    # print([i for i in User.objects.filter(name="1\'", age__ge=0).update(name='injection')])
     # UPDATE ormtable SET name='injection'
     # WHERE id IN (SELECT id FROM ormtable WHERE name='1'' or 1=1' ORDER BY "name" NULLS FIRST )
 

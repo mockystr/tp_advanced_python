@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2 import sql
+from psycopg2 import _ext
 from fields import Field
 from exceptions import (MultipleObjectsReturned,
                         DoesNotExist,
@@ -104,41 +105,51 @@ class Condition:
     def from_string(cond, owner_class):
         condspl = Condition.check_fields(cond, owner_class)
 
-        if isinstance(cond[1], str):
-            tmp_value = Condition.quote_replace(cond[1])
-        elif isinstance(cond[1], (list, tuple)):
-            tmp_value = [Condition.quote_replace(str(i)) for i in cond[1]]
-        else:
-            tmp_value = cond[1]
+        # if isinstance(cond[1], str):
+        #     tmp_value = Condition.quote_replace(cond[1])
+        # elif isinstance(cond[1], (list, tuple)):
+        #     tmp_value = [Condition.quote_replace(str(i)) for i in cond[1]]
+        # else:
+        #     tmp_value = cond[1]
 
         if len(condspl) == 2:
-            return condspl[0], condspl[1], tmp_value
+            return str(condspl[0]), str(condspl[1]), str(cond[1])
         elif len(condspl) == 1:
-            return condspl[0], 'exact', tmp_value
+            return str(condspl[0]), 'exact', str(cond[1])
         else:
             raise LookupError("unresolved lookup {}".format(cond))
 
     def format_cond(self):
         if self.cond in self._conditions:
+            like_value = str(self.value).replace('\'', '\'\'')
             if self.cond == 'exact':
-                # print("{}={}".format(self.field_name, sql.Identifier(self.value).as_string(connection)))
-                return "{}='{}'".format(self.field_name, self.value)
+                return sql.SQL("{}={}").format(sql.Identifier(self.field_name),
+                                               sql.Literal(self.value)).as_string(cursor)
             elif self.cond == 'in':
-                return "{} IN {}".format(self.field_name, tuple(self.value))
+                tmp_compose = sql.Composed(sql.SQL(', ').join([sql.Literal(str(i)) for i in tuple(self.value)]))
+                return sql.SQL("{} IN ({})").format(sql.Identifier(self.field_name),
+                                                    tmp_compose).as_string(cursor)
             elif self.cond == 'lt':
-                return "{} < '{}'".format(self.field_name, self.value)
+                return sql.SQL("{} < {}").format(sql.Identifier(self.field_name),
+                                                 sql.Literal(self.value)).as_string(cursor)
             elif self.cond == 'gt':
-                return "{} > '{}'".format(self.field_name, self.value)
+                return sql.SQL("{} > {}").format(sql.Identifier(self.field_name),
+                                                 sql.Literal(self.value)).as_string(cursor)
             elif self.cond == 'le':
-                return "{} <= '{}'".format(self.field_name, self.value)
+                return sql.SQL("{} <= {}").format(sql.Identifier(self.field_name),
+                                                  sql.Literal(self.value)).as_string(cursor)
             elif self.cond == 'ge':
-                return "{} >= '{}'".format(self.field_name, self.value)
+                return sql.SQL("{} >= {}").format(sql.Identifier(self.field_name),
+                                                  sql.Literal(self.value)).as_string(cursor)
             elif self.cond == 'contains':
-                return "{} LIKE '%{}%' ESCAPE '\\'".format(self.field_name, self.value)
+                return sql.SQL("{} LIKE '%{}%' ESCAPE '\\'").format(sql.Identifier(self.field_name),
+                                                                    sql.SQL(like_value)).as_string(cursor)
             elif self.cond == 'startswith':
-                return "{} LIKE '{}%' ESCAPE '\\'".format(self.field_name, self.value)
+                return sql.SQL("{} LIKE '{}%' ESCAPE '\\'").format(sql.Identifier(self.field_name),
+                                                                   sql.SQL(like_value)).as_string(cursor)
             elif self.cond == 'endswith':
-                return "{} LIKE '%{}' ESCAPE '\\'".format(self.field_name, self.value)
+                return sql.SQL("{} LIKE '%{}' ESCAPE '\\'").format(sql.Identifier(self.field_name),
+                                                                   sql.SQL(like_value)).as_string(cursor)
             else:
                 raise LookupError("Unsupported lookup '{}' for {} column.".format(self.cond, self.field_name))
 
@@ -176,12 +187,12 @@ class QuerySet:
 
             if isinstance(self.limit, slice):
                 if self.limit.start:
-                    limit_list.extend(['OFFSET', str(self.limit.start)])
+                    limit_list.extend([sql.SQL('OFFSET'), sql.SQL(str(self.limit.start))])
                 if self.limit.stop:
-                    limit_list.extend(['LIMIT', str(self.limit.stop - (self.limit.start or 0))])
+                    limit_list.extend([sql.SQL('LIMIT'), sql.SQL(str(self.limit.stop - (self.limit.start or 0)))])
                 return limit_list
             elif isinstance(self.limit, int):
-                limit_list.extend(['OFFSET', str(self.limit), 'LIMIT', '1'])
+                limit_list.extend([sql.SQL('OFFSET'), sql.SQL(str(self.limit)), sql.SQL('LIMIT'), sql.SQL('1')])
                 return limit_list
             else:
                 raise TypeError('unsupported type of limit index')
@@ -193,9 +204,11 @@ class QuerySet:
 
             for i in self._order_by:
                 if i.startswith('-'):
-                    formatted_order.append("\"{}\" DESC NULLS LAST".format(i.strip('-')))
+                    formatted_order.append(
+                        sql.SQL("{} DESC NULLS LAST").format(sql.Identifier(i.strip('-'))))
                 else:
-                    formatted_order.append("\"{}\" NULLS FIRST".format(i.strip('-')))
+                    formatted_order.append(
+                        sql.SQL("{} NULLS FIRST").format(sql.Identifier(i.strip('-'))))
             return formatted_order
         return None
 
@@ -270,37 +283,43 @@ class QuerySet:
         return self
 
     def update(self, *_, **kwargs):
+        if not kwargs:
+            raise ValueError("you shoud write params")
+
         [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
 
-        query = ['UPDATE {}'.format(self.model_cls._table_name), 'SET',
-                 ', '.join(["{}='{}'".format(i[0], i[1]) for i in kwargs.items()])]
+        query = [sql.SQL('UPDATE {}').format(sql.Identifier(str(self.model_cls._table_name).lower())), sql.SQL('SET'),
+                 sql.SQL(', ').join(
+                     [sql.SQL("{}={}").format(sql.Identifier(i[0]), sql.Literal(i[1])) for i in kwargs.items()])]
         if self.where:
-            query.extend(['WHERE', 'id IN (SELECT id FROM {} WHERE'.format(self.model_cls._table_name),
-                          ' AND '.join(self.format_where())])
+            sql_where = [sql.SQL(i) for i in self.format_where()]
+            query.extend([sql.SQL('WHERE'),
+                          sql.SQL('id IN (SELECT id FROM {} WHERE').format(
+                              sql.Identifier(str(self.model_cls._table_name).lower())),
+                          sql.SQL(' AND ').join(sql_where)])
         if self._order_by is not None:
-            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
+            query.extend([sql.SQL("ORDER BY"), sql.SQL(", ").join(self.format_order_list())])
         if self.limit:
             query.extend(self.format_limit())
-        query.append(')')
+        query.append(sql.SQL(')'))
 
-        print(' '.join(query))
-        cursor.execute(' '.join(query))
-        # connection.commit()
+        print(' '.join([i.as_string(connection) for i in query]))
+        cursor.execute(' '.join([i.as_string(connection) for i in query]))
+        connection.commit()
         return cursor.statusmessage.split()[1]
 
     def delete(self):
-        # [Condition.check_fields(i, self.model_cls) for i in ['id', *self.fields]]
-
-        query = ['DELETE FROM {0} WHERE ctid in (SELECT ctid FROM {0}'.format(self.model_cls._table_name)]
+        query = [sql.SQL('DELETE FROM {0} WHERE ctid in (SELECT ctid FROM {0}').format(
+            sql.Identifier(str(self.model_cls._table_name).lower()))]
         if self.where:
-            query.extend(['WHERE', ' AND '.join(self.format_where())])
+            query.extend([sql.SQL('WHERE'), sql.SQL(' AND ').join([sql.SQL(i) for i in self.format_where()])])
         if self._order_by is not None:
-            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
+            query.extend([sql.SQL("ORDER BY"), sql.SQL(", ").join(self.format_order_list())])
         if self.limit:
             query.extend(self.format_limit())
-        query.append(')')
-        print(' '.join(query))
-        cursor.execute(' '.join(query))
+        query.append(sql.SQL(')'))
+        # print(' '.join([i.as_string(connection) for i in query]))
+        cursor.execute(' '.join([i.as_string(connection) for i in query]))
         # connection.commit()
         return cursor.statusmessage.split()[1]
 
@@ -315,39 +334,39 @@ class QuerySet:
             self.__cache['count'] = res_len
             return res_len
 
-        query = ['SELECT count(*) FROM (SELECT * FROM {}'.format(self.model_cls._table_name)]
+        query = [sql.SQL('SELECT count(*) FROM (SELECT * FROM {}').format(
+            sql.Identifier(str(self.model_cls._table_name).lower()))]
 
         if self.where:
-            query.extend(['WHERE', ' AND '.join(self.format_where())])
+            query.extend([sql.SQL('WHERE'), sql.SQL(' AND ').join([sql.SQL(i) for i in self.format_where()])])
         if self.limit:
             query.extend(self.format_limit())
 
-        query.append(') as tmp_table')
-        print(' '.join(query))
-        cursor.execute(' '.join(query))
+        query.append(sql.SQL(') as tmp_table'))
+        print(' '.join([i.as_string(connection) for i in query]))
+        cursor.execute(' '.join([i.as_string(connection) for i in query]))
         res_len = cursor.fetchone()[0]
         self.__cache['count'] = res_len
         return res_len
 
     def _build(self):
-        [Condition.check_fields(i, self.model_cls) for i in self.where.items()]
-
-        query = ["SELECT *"]
-        query.extend(["FROM", self.model_cls._table_name])
-
         if self.where:
-            query.extend(["WHERE", " AND ".join(self.format_where())])
+            [Condition.check_fields(i, self.model_cls) for i in self.where.items()]
 
+        query = [sql.SQL("SELECT *")]
+        query.extend([sql.SQL("FROM"), sql.Identifier(str(self.model_cls._table_name).lower())])
+
+        if self.where is not None:
+            query.extend([sql.SQL("WHERE"), sql.SQL(" AND ").join([sql.SQL(i) for i in self.format_where()])])
         if self._order_by is not None:
-            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
-
+            query.extend([sql.SQL("ORDER BY"), sql.SQL(", ").join(self.format_order_list())])
         if self.limit is not None:
             query.extend(self.format_limit())
 
         # print('BUILD QUERY', query)
-        print(' '.join(query))
+        print(' '.join([i.as_string(connection) for i in query]))
 
-        cursor.execute(' '.join(query))
+        cursor.execute(' '.join([i.as_string(connection) for i in query]))
         res = cursor.fetchall()
 
         if isinstance(self.limit, int):
@@ -381,17 +400,24 @@ class Manage:
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
+        [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
         return QuerySet(self.model_cls, kwargs)
 
     def get(self, *_, **kwargs):
         """Get only one object"""
+        if not kwargs:
+            raise ValueError("you should write params")
+
         where_list = []
         for i in kwargs.items():
             where_list.append(Condition(i, self.model_cls).format_cond())
 
-        select_get_query = "SELECT * FROM {0} WHERE {1};".format(self.model_cls._table_name, ' AND '.join(where_list))
-        cursor.execute(select_get_query)
+        select_get_query = sql.SQL("SELECT * FROM {} WHERE {};").format(
+            sql.Identifier(str(self.model_cls._table_name).lower()),
+            sql.SQL(' AND ').join([sql.SQL(i) for i in where_list]))
+
+        print(select_get_query.as_string(connection))
+        cursor.execute(select_get_query.as_string(connection))
         res = cursor.fetchall()
 
         if len(res) > 1:
@@ -419,15 +445,15 @@ class Manage:
             value = getattr(self.model_cls, field_name).validate(kwargs.get(field_name))
             edited_kw[field_name] = value
 
-        insert_query = "INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;".format(
-            self.model_cls._table_name,
-            ', '.join(edited_kw.keys()),
-            ', '.join(map(lambda x: "\'{}\'".format(Condition.quote_replace(x)), edited_kw.values())))
-        print(insert_query)
-        cursor.execute(insert_query)
+        insert_query = sql.SQL("INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;").format(
+            sql.Identifier(str(self.model_cls._table_name).lower()),
+            sql.SQL(', ').join([sql.Identifier(i) for i in edited_kw.keys()]),
+            sql.SQL(', ').join([sql.Literal(i) for i in edited_kw.values()]))
+
+        print(insert_query.as_string(connection))
+        cursor.execute(insert_query.as_string(connection))
         res = dict(zip([i.name for i in cursor.description], cursor.fetchone()))
         connection.commit()
-
         return self.model_cls(**res)
 
 
@@ -454,10 +480,11 @@ class Model(metaclass=ModelMeta):
             raise DeleteError('{} object can\'t be deleted because its id attribute is set to None.'.
                               format(self._table_name))
         try:
-            delete_query = "DELETE FROM {} WHERE id='{}'".format(Condition.quote_replace(self._table_name),
-                                                                 int(self.id))
-            cursor.execute(delete_query)
-            # connection.commit()
+            delete_query = sql.SQL("DELETE FROM {} WHERE id={}").format(sql.Identifier(str(self._table_name).lower()),
+                                                                        sql.Literal(self.id))
+            print(delete_query.as_string(connection))
+            cursor.execute(delete_query.as_string(connection))
+            connection.commit()
         except Exception:
             raise DeleteError('{} object can\'t be deleted because its id is incorrect.'.
                               format(self._table_name))
@@ -477,33 +504,34 @@ class Model(metaclass=ModelMeta):
                 attr_value = getattr(self, i)
 
                 if attr_value is None:
-                    set_arr.append("{}=null".format(i))
+                    set_arr.append(sql.SQL("{}=null").format(sql.Identifier(i)))
                 else:
-                    set_arr.append("{}=\'{}\'".format(i, Condition.quote_replace(attr_value)))
+                    set_arr.append(sql.SQL("{}={}").format(sql.Identifier(i), sql.Literal(attr_value)))
 
-            update_query = "UPDATE {} SET {} WHERE id='{}'".format(Condition.quote_replace(self._table_name),
-                                                                   ', '.join(set_arr),
-                                                                   int(self.id))
-            print(update_query)
-            cursor.execute(update_query)
+            update_query = sql.SQL("UPDATE {} SET {} WHERE id={}").format(sql.Identifier(str(self._table_name).lower()),
+                                                                          sql.SQL(', ').join(set_arr),
+                                                                          sql.Literal(self.id))
+            print(update_query.as_string(connection))
+            cursor.execute(update_query.as_string(connection))
             connection.commit()
         else:
             values = []
             for i in object_fields:
                 if getattr(self, i) is not None:
-                    values.append(format("\'{}\'").format(Condition.quote_replace(getattr(self, i))))
+                    values.append(sql.SQL("{}").format(sql.Literal(getattr(self, i))))
                 else:
                     if i == 'id':
-                        values.append('DEFAULT')
+                        values.append(sql.SQL('DEFAULT'))
                     else:
-                        values.append("null")
+                        values.append(sql.Literal("null"))
 
-            insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;""".format(
-                Condition.quote_replace(self._table_name),
-                ', '.join(object_fields),
-                ', '.join(values))
-            print(insert_query)
-            cursor.execute(insert_query)
+            insert_query = sql.SQL("INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;").format(
+                sql.Identifier(str(self._table_name).lower()),
+                sql.SQL(', ').join([sql.Identifier(i) for i in object_fields]),
+                sql.SQL(', ').join(values))
+
+            print(insert_query.as_string(connection))
+            cursor.execute(insert_query.as_string(connection))
             self.id = cursor.fetchone()[0]
             connection.commit()
 
