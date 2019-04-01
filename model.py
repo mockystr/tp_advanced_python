@@ -1,4 +1,5 @@
 import psycopg2
+from psycopg2 import sql
 from fields import Field
 from exceptions import (MultipleObjectsReturned,
                         DoesNotExist,
@@ -91,25 +92,34 @@ class Condition:
         if condspl[0] not in ['id', *owner_class._fields.keys()]:
             raise LookupError("Cannot resolve keyword '{}' into field. Choices are: {}".
                               format(condspl[0], ', '.join(owner_class._fields.keys())))
+
+        if isinstance(cond[1], str):
+            tmp_value = cond[1].replace('\'', '\'\'')
+        elif isinstance(cond[1], (list, tuple)):
+            tmp_value = [str(i).replace('\'', '\'\'') for i in cond[1]]
+        else:
+            tmp_value = cond[1]
+
         if len(condspl) == 2:
-            return condspl[0], condspl[1], cond[1]
+            return condspl[0], condspl[1], tmp_value
         elif len(condspl) == 1:
-            return condspl[0], 'exact', cond[1]
+            return condspl[0], 'exact', tmp_value
 
     def format_cond(self):
         if self.cond in self._conditions:
             if self.cond == 'exact':
+                # print("{}={}".format(self.field_name, sql.Identifier(self.value).as_string(connection)))
                 return "{}='{}'".format(self.field_name, self.value)
             elif self.cond == 'in':
                 return "{} IN {}".format(self.field_name, tuple(self.value))
             elif self.cond == 'lt':
-                return "{} < {}".format(self.field_name, self.value)
+                return "{} < '{}'".format(self.field_name, self.value)
             elif self.cond == 'gt':
-                return "{} > {}".format(self.field_name, self.value)
+                return "{} > '{}'".format(self.field_name, self.value)
             elif self.cond == 'le':
-                return "{} <= {}".format(self.field_name, self.value)
+                return "{} <= '{}'".format(self.field_name, self.value)
             elif self.cond == 'ge':
-                return "{} >= {}".format(self.field_name, self.value)
+                return "{} >= '{}'".format(self.field_name, self.value)
             elif self.cond == 'contains':
                 return "{} LIKE '%{}%' ESCAPE '\\'".format(self.field_name, self.value)
             elif self.cond == 'startswith':
@@ -306,14 +316,14 @@ class QuerySet:
         return res_len
 
     def _build(self):
-        query = ["SELECT *"]
-        query.extend(['FROM', self.model_cls._table_name])
+        query = ["""SELECT *"""]
+        query.extend(["""FROM""", self.model_cls._table_name])
 
         if self.where:
-            query.extend(['WHERE', ' AND '.join(self.format_where())])
+            query.extend(["""WHERE""", """ AND """.join(self.format_where())])
 
         if self._order_by is not None:
-            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
+            query.extend(["""ORDER BY""", """, """.join(self.format_order_list())])
 
         if self.limit is not None:
             query.extend(self.format_limit())
@@ -364,8 +374,9 @@ class Manage:
         for i in kwargs.items():
             where_list.append(Condition(i, self.model_cls).format_cond())
 
-        select_get_query = """SELECT * FROM {0} WHERE {1};""".format(self.model_cls._table_name,
-                                                                     ' AND '.join(where_list))
+        select_get_query = sql.SQL("SELECT * FROM {0} WHERE {1};"). \
+            format(sql.Identifier(self.model_cls._table_name),
+                   sql.SQL(' AND ').join(map(sql.Identifier, where_list)))
         cursor.execute(select_get_query)
         res = cursor.fetchall()
 
