@@ -84,52 +84,57 @@ if __name__ == '__main__':
     # print([i for i in User.objects.filter(name__startswith='e').order_by('-name')])
     # print(User.objects.filter(name__startswith='e').order_by('-name')[2])
 
-    # update_int = User.objects.filter(name__startswith='3', age__ge=0).order_by('-name')[:5].update(description='new_52')
+    # update_int = User.objects.filter(name__startswith='3', age__ge=0).order_by('name')[:5].update(description='new52')
     # print(update_int)
 
-    # delete_int = User.objects.filter(name__startswith='b').order_by('-name')[:7].delete()
+    # delete_int = User.objects.filter(name__startswith='a').order_by('-name')[:7].delete()
     # print(delete_int)
-    # print([i for i in User.objects.filter(name__startswith='b').order_by('-name')[:7]])
+    # print([i for i in User.objects.filter(name__startswith='a').order_by('-name')[:7]])
 
     """sql injections check"""
     # print([i for i in User.objects.filter(name='\' or 1=1')])
     # SELECT * FROM ormtable WHERE name=''' or 1=1' ORDER BY name NULLS FIRST
 
-    # print([i for i in User.objects.filter(age__lt='5 or 1=1')])
-    # psycopg2.DataError: invalid input syntax for integer: "5 or 1=1"
-    # LINE 1: SELECT * FROM ormtable WHERE age < '5 or 1=1' ORDER BY name ...
+    # print([i for i in User.objects.filter(name="'")])
+    # SELECT * FROM ormtable WHERE name='''' ORDER BY name NULLS FIRST
+
+    # print([i for i in User.objects.filter(name="'").order_by('name', '-description \' or 1=1')])
+    # exceptions.OrderByFieldError: ordering refers to the nonexistent fields: name, description ' or 1=1
+
+    # print([i for i in User.objects.filter(age__lt='5\' or 1=1')])
+    # psycopg2.DataError: invalid input syntax for integer: "5' or 1=1"
+    # LINE 1: SELECT * FROM ormtable WHERE age < '5'' or 1=1' ORDER BY nam...
 
     # print([i for i in User.objects.filter(name__in=['a', ') SELECT * from ormtable;'])])
     # SELECT * FROM ormtable WHERE name IN ('a', ') SELECT * from ormtable;') ORDER BY name NULLS FIRST
+
     # print([i for i in User.objects.filter(name__contains='a %\' or 1=1')])
     # SELECT * FROM ormtable WHERE name LIKE '%a %'' or 1=1%' ESCAPE '\' ORDER BY name NULLS FIRST
 
-    from model import connection, cursor
-    # query = 'SELECT * from ormtable where name=%s order by name DESC'
-    # cursor.execute(query, ('\' or 1=1', ))
-    # print(cursor.fetchall())
-    # print(cursor.query)
-    # cursor.execute()
+    # user = User.objects.create(name='0\');\nDELETE from ormtable where id=2600; --')
+    # print(user.id)
 
-    from psycopg2 import sql
+    # print([i for i in User.objects.filter(name="1\' or 1=1").update(name='injection')])
+    # UPDATE ormtable SET name='injection'
+    # WHERE id IN (SELECT id FROM ormtable WHERE name='1'' or 1=1' ORDER BY "name" NULLS FIRST )
 
+    # user = User(name='name\'')
+    # user.asd = 'asd'
+    # user.save()
+    # user.name = 'asd\'); select * from ormtable;'
+    # user.save()
+    # user.id = '1 or 1=1'
+    # user.delete()
+
+    # INSERT INTO ormtable (id, name, description, date_added, age, coins, is_superuser)
+    # VALUES (DEFAULT, 'name''', null, null, null, null, null) RETURNING id;
+    # UPDATE ormtable SET id='2623', name='asd''); select * from ormtable;', description=null,
+    # date_added=null, age=null, coins=null, is_superuser=null WHERE id='2623'
+    # ValueError: invalid literal for int() with base 10: '1 or 1=1'
     #
-    # q = 'SELECT * from %s where name=%s order by name DESC'
-    #
-    # cursor.execute(q, ("ormtable", 1))
-    # print(cursor.fetchall())
-
-    # r = cursor.execute('INSERT INTO %s (name,date_added) VALUES (%s, %s);',
-    #                    ('ormtable', 'O rehly', datetime.date(2005, 11, 18)))
-    # print(cursor.query)
-    # print(sql.SQL('SELECT * from ormtable where name={}').format(sql.Identifier('\'')).as_string(connection))
-    #
-    # select_get_query = sql.SQL("SELECT * FROM {0} WHERE {1};").format(sql.Identifier('ormtable'),
-    #                                                                   sql.SQL(' AND ').join(
-    #                                                                       map(sql.Identifier, ['name=\''])))
-    # cursor.execute(select_get_query)
-    # res = cursor.fetchall()
-    # print(res)
-
-    # sql_query = 'SELECT * FROM %s'
-    # cursor.execute(sql_query, (str(input()),))
+    # Traceback (most recent call last):
+    #   File "/Users/emirnavruzov/Documents/technopark/tp_advanced_python/orm.py", line 120, in <module>
+    #     user.delete()
+    #   File "/Users/emirnavruzov/Documents/technopark/tp_advanced_python/model.py", line 463, in delete
+    #     format(self._table_name))
+    # exceptions.DeleteError: ormtable object can't be deleted because its id is incorrect.

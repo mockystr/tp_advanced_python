@@ -86,17 +86,28 @@ class Condition:
         self.field_name, self.cond, self.value = self.from_string(cond, owner_class)
 
     @staticmethod
-    def from_string(cond, owner_class):
+    def quote_replace(string):
+        return str(string).replace('\'', '\'\'')
+
+    @staticmethod
+    def check_fields(cond, owner_class):
+        # print(cond)
         condspl = cond[0].split('__')
 
         if condspl[0] not in ['id', *owner_class._fields.keys()]:
             raise LookupError("Cannot resolve keyword '{}' into field. Choices are: {}".
                               format(condspl[0], ', '.join(owner_class._fields.keys())))
 
+        return condspl
+
+    @staticmethod
+    def from_string(cond, owner_class):
+        condspl = Condition.check_fields(cond, owner_class)
+
         if isinstance(cond[1], str):
-            tmp_value = cond[1].replace('\'', '\'\'')
+            tmp_value = Condition.quote_replace(cond[1])
         elif isinstance(cond[1], (list, tuple)):
-            tmp_value = [str(i).replace('\'', '\'\'') for i in cond[1]]
+            tmp_value = [Condition.quote_replace(str(i)) for i in cond[1]]
         else:
             tmp_value = cond[1]
 
@@ -104,6 +115,8 @@ class Condition:
             return condspl[0], condspl[1], tmp_value
         elif len(condspl) == 1:
             return condspl[0], 'exact', tmp_value
+        else:
+            raise LookupError("unresolved lookup {}".format(cond))
 
     def format_cond(self):
         if self.cond in self._conditions:
@@ -180,9 +193,9 @@ class QuerySet:
 
             for i in self._order_by:
                 if i.startswith('-'):
-                    formatted_order.append("{} DESC NULLS LAST".format(i.strip('-')))
+                    formatted_order.append("\"{}\" DESC NULLS LAST".format(i.strip('-')))
                 else:
-                    formatted_order.append("{} NULLS FIRST".format(i.strip('-')))
+                    formatted_order.append("\"{}\" NULLS FIRST".format(i.strip('-')))
             return formatted_order
         return None
 
@@ -213,7 +226,7 @@ class QuerySet:
 
     def filter(self, *_, **kwargs):
         """Get rows that are suitable for condition"""
-        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
+        [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
 
         if self.where is not None:
             self.where = {**self.where, **kwargs}
@@ -235,8 +248,8 @@ class QuerySet:
         if isinstance(args, (tuple, list)):
             stripped_order = [i.strip('-') for i in args]
             if not set(stripped_order).issubset(self.fields.keys()):
-                raise OrderByFieldError('ordering refers to the nonexistent field \'{}\''.
-                                        format(stripped_order))
+                raise OrderByFieldError('ordering refers to the nonexistent fields: {}'.
+                                        format(', '.join(stripped_order)))
         else:
             raise ValueError("ordering can be only tuple or list object")
 
@@ -257,7 +270,8 @@ class QuerySet:
         return self
 
     def update(self, *_, **kwargs):
-        [Condition.from_string(i, self.model_cls) for i in kwargs.items()]
+        [Condition.check_fields(i, self.model_cls) for i in kwargs.items()]
+
         query = ['UPDATE {}'.format(self.model_cls._table_name), 'SET',
                  ', '.join(["{}='{}'".format(i[0], i[1]) for i in kwargs.items()])]
         if self.where:
@@ -269,13 +283,14 @@ class QuerySet:
             query.extend(self.format_limit())
         query.append(')')
 
-        # print(' '.join(query))
+        print(' '.join(query))
         cursor.execute(' '.join(query))
-        connection.commit()
+        # connection.commit()
         return cursor.statusmessage.split()[1]
 
     def delete(self):
-        [Condition.from_string(i, self.model_cls) for i in list('id', self.fields)]
+        # [Condition.check_fields(i, self.model_cls) for i in ['id', *self.fields]]
+
         query = ['DELETE FROM {0} WHERE ctid in (SELECT ctid FROM {0}'.format(self.model_cls._table_name)]
         if self.where:
             query.extend(['WHERE', ' AND '.join(self.format_where())])
@@ -284,9 +299,9 @@ class QuerySet:
         if self.limit:
             query.extend(self.format_limit())
         query.append(')')
-        # print(' '.join(query))
+        print(' '.join(query))
         cursor.execute(' '.join(query))
-        connection.commit()
+        # connection.commit()
         return cursor.statusmessage.split()[1]
 
     def count(self):
@@ -305,7 +320,6 @@ class QuerySet:
         if self.where:
             query.extend(['WHERE', ' AND '.join(self.format_where())])
         if self.limit:
-            # todo защита от sql injection
             query.extend(self.format_limit())
 
         query.append(') as tmp_table')
@@ -316,14 +330,16 @@ class QuerySet:
         return res_len
 
     def _build(self):
-        query = ["""SELECT *"""]
-        query.extend(["""FROM""", self.model_cls._table_name])
+        [Condition.check_fields(i, self.model_cls) for i in self.where.items()]
+
+        query = ["SELECT *"]
+        query.extend(["FROM", self.model_cls._table_name])
 
         if self.where:
-            query.extend(["""WHERE""", """ AND """.join(self.format_where())])
+            query.extend(["WHERE", " AND ".join(self.format_where())])
 
         if self._order_by is not None:
-            query.extend(["""ORDER BY""", """, """.join(self.format_order_list())])
+            query.extend(["ORDER BY", ", ".join(self.format_order_list())])
 
         if self.limit is not None:
             query.extend(self.format_limit())
@@ -374,9 +390,7 @@ class Manage:
         for i in kwargs.items():
             where_list.append(Condition(i, self.model_cls).format_cond())
 
-        select_get_query = sql.SQL("SELECT * FROM {0} WHERE {1};"). \
-            format(sql.Identifier(self.model_cls._table_name),
-                   sql.SQL(' AND ').join(map(sql.Identifier, where_list)))
+        select_get_query = "SELECT * FROM {0} WHERE {1};".format(self.model_cls._table_name, ' AND '.join(where_list))
         cursor.execute(select_get_query)
         res = cursor.fetchall()
 
@@ -405,12 +419,11 @@ class Manage:
             value = getattr(self.model_cls, field_name).validate(kwargs.get(field_name))
             edited_kw[field_name] = value
 
-        insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;""".format(self.model_cls._table_name,
-                                                                                    ', '.join(edited_kw.keys()),
-                                                                                    ', '.join(map(
-                                                                                        lambda x: "\'{}\'".format(x),
-                                                                                        edited_kw.values())))
-        # print(insert_query)
+        insert_query = "INSERT INTO {0} ({1}) VALUES ({2}) RETURNING *;".format(
+            self.model_cls._table_name,
+            ', '.join(edited_kw.keys()),
+            ', '.join(map(lambda x: "\'{}\'".format(Condition.quote_replace(x)), edited_kw.values())))
+        print(insert_query)
         cursor.execute(insert_query)
         res = dict(zip([i.name for i in cursor.description], cursor.fetchone()))
         connection.commit()
@@ -441,9 +454,10 @@ class Model(metaclass=ModelMeta):
             raise DeleteError('{} object can\'t be deleted because its id attribute is set to None.'.
                               format(self._table_name))
         try:
-            delete_query = """DELETE FROM {} WHERE id={}""".format(self._table_name, self.id)
+            delete_query = "DELETE FROM {} WHERE id='{}'".format(Condition.quote_replace(self._table_name),
+                                                                 int(self.id))
             cursor.execute(delete_query)
-            connection.commit()
+            # connection.commit()
         except Exception:
             raise DeleteError('{} object can\'t be deleted because its id is incorrect.'.
                               format(self._table_name))
@@ -465,31 +479,33 @@ class Model(metaclass=ModelMeta):
                 if attr_value is None:
                     set_arr.append("{}=null".format(i))
                 else:
-                    set_arr.append("{}=\'{}\'".format(i, attr_value))
+                    set_arr.append("{}=\'{}\'".format(i, Condition.quote_replace(attr_value)))
 
-            update_query = "UPDATE {} SET {} WHERE id={}".format(self._table_name,
-                                                                 ', '.join(set_arr),
-                                                                 self.id)
+            update_query = "UPDATE {} SET {} WHERE id='{}'".format(Condition.quote_replace(self._table_name),
+                                                                   ', '.join(set_arr),
+                                                                   int(self.id))
+            print(update_query)
             cursor.execute(update_query)
             connection.commit()
         else:
             values = []
             for i in object_fields:
                 if getattr(self, i) is not None:
-                    values.append(format("\'{}\'").format(getattr(self, i)))
+                    values.append(format("\'{}\'").format(Condition.quote_replace(getattr(self, i))))
                 else:
                     if i == 'id':
                         values.append('DEFAULT')
                     else:
                         values.append("null")
 
-            insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;""".format(self._table_name,
-                                                                                         ', '.join(object_fields),
-                                                                                         ', '.join(values))
+            insert_query = """INSERT INTO {0} ({1}) VALUES ({2}) RETURNING id;""".format(
+                Condition.quote_replace(self._table_name),
+                ', '.join(object_fields),
+                ', '.join(values))
+            print(insert_query)
             cursor.execute(insert_query)
-            connection.commit()
-
             self.id = cursor.fetchone()[0]
+            connection.commit()
 
     class Meta:
         table_name = ''
