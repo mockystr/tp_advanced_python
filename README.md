@@ -1,2 +1,2 @@
-# tp_advanced_python
-Технопарк 2019 весна. Углубленный Python
+# tp_orm
+technopark homework active record orm 
