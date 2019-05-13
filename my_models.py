@@ -1,5 +1,6 @@
 from model import Model
-from fields import StringField, IntField, DateField, FloatField, BooleanField
+from fields import (StringField, IntField, DateField, 
+		FloatField, BooleanField)
 
 
 class User(Model):
