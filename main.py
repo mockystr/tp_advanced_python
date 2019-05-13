@@ -135,7 +135,7 @@ if __name__ == '__main__':
     # ValueError: invalid literal for int() with base 10: '1 or 1=1'
     #
     # Traceback (most recent call last):
-    #   File "/Users/emirnavruzov/Documents/technopark/tp_advanced_python/orm.py", line 120, in <module>
+    #   File "/Users/emirnavruzov/Documents/technopark/tp_advanced_python/main.py", line 120, in <module>
     #     user.delete()
     #   File "/Users/emirnavruzov/Documents/technopark/tp_advanced_python/model.py", line 463, in delete
     #     format(self._table_name))
